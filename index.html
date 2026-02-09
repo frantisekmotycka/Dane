@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Automatické čtení faktur pomocí OCR - rozpoznání IČO, DPH, částek. Funguje offline na mobilu i počítači.">
+    <title>OCR Čtečka Faktur - IČO, DPH, Částka</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📄 OCR Čtečka Faktur</h1>
+            <p>Nahrajte obrázek faktury nebo účtenky a automaticky se načtou údaje</p>
+        </header>
+
+        <main>
+            <!-- Upload sekce -->
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p class="upload-text">Přetáhněte obrázek faktury sem</p>
+                    <p class="upload-subtext">nebo</p>
+                    <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+                        Vyberte soubor
+                    </button>
+                    <input type="file" id="fileInput" accept="image/*,.pdf" style="display: none;">
+                    <p class="upload-hint">Podporované formáty: JPG, PNG, PDF</p>
+                </div>
+            </div>
+
+            <!-- Loading indikátor -->
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Zpracovávám dokument pomocí OCR...</p>
+                <p class="loading-sub">Toto může trvat 5-15 sekund</p>
+            </div>
+
+            <!-- Náhled obrázku -->
+            <div class="preview-section" id="previewSection" style="display: none;">
+                <h2>📷 Náhled dokumentu</h2>
+                <div class="image-preview">
+                    <img id="previewImage" alt="Náhled">
+                </div>
+            </div>
+
+            <!-- Výsledky OCR -->
+            <div class="results-section" id="resultsSection" style="display: none;">
+                <h2>✅ Načtené údaje</h2>
+                
+                <div class="result-grid">
+                    <!-- IČO -->
+                    <div class="result-card">
+                        <div class="result-label">
+                            <span class="icon">🏢</span>
+                            <span>IČO</span>
+                        </div>
+                        <div class="result-value" id="icoValue">Nenalezeno</div>
+                        <div class="confidence" id="icoConfidence"></div>
+                    </div>
+
+                    <!-- Celková částka -->
+                    <div class="result-card highlight">
+                        <div class="result-label">
+                            <span class="icon">💰</span>
+                            <span>Celková částka</span>
+                        </div>
+                        <div class="result-value large" id="totalAmount">Nenalezeno</div>
+                        <div class="confidence" id="totalConfidence"></div>
+                    </div>
+
+                    <!-- Částka bez DPH -->
+                    <div class="result-card">
+                        <div class="result-label">
+                            <span class="icon">💵</span>
+                            <span>Částka bez DPH</span>
+                        </div>
+                        <div class="result-value" id="amountNoDph">Nenalezeno</div>
+                        <div class="confidence" id="amountConfidence"></div>
+                    </div>
+
+                    <!-- DPH sazba -->
+                    <div class="result-card">
+                        <div class="result-label">
+                            <span class="icon">📊</span>
+                            <span>DPH sazba</span>
+                        </div>
+                        <div class="result-value" id="dphRate">Nenalezeno</div>
+                        <div class="confidence" id="dphRateConfidence"></div>
+                    </div>
+
+                    <!-- DPH částka -->
+                    <div class="result-card">
+                        <div class="result-label">
+                            <span class="icon">💳</span>
+                            <span>Částka DPH</span>
+                        </div>
+                        <div class="result-value" id="dphAmount">Nenalezeno</div>
+                        <div class="confidence" id="dphAmountConfidence"></div>
+                    </div>
+
+                    <!-- Datum -->
+                    <div class="result-card">
+                        <div class="result-label">
+                            <span class="icon">📅</span>
+                            <span>Datum vystavení</span>
+                        </div>
+                        <div class="result-value" id="dateValue">Nenalezeno</div>
+                        <div class="confidence" id="dateConfidence"></div>
+                    </div>
+                </div>
+
+                <!-- Raw OCR text -->
+                <div class="raw-text-section">
+                    <h3>📝 Kompletní text z OCR</h3>
+                    <button class="btn-toggle" onclick="toggleRawText()">Zobrazit/Skrýt</button>
+                    <div class="raw-text" id="rawText" style="display: none;"></div>
+                </div>
+
+                <!-- Akce -->
+                <div class="actions">
+                    <button class="btn-primary" onclick="copyResults()">📋 Kopírovat výsledky</button>
+                    <button class="btn-secondary" onclick="resetForm()">🔄 Nahrát další</button>
+                </div>
+            </div>
+
+            <!-- Error zobrazení -->
+            <div class="error-section" id="errorSection" style="display: none;">
+                <div class="error-message">
+                    <span class="error-icon">⚠️</span>
+                    <div>
+                        <h3>Chyba při zpracování</h3>
+                        <p id="errorMessage"></p>
+                    </div>
+                </div>
+                <button class="btn-secondary" onclick="resetForm()">Zkusit znovu</button>
+            </div>
+        </main>
+
+        <footer>
+            <p>OCR Engine: Tesseract.js | Vytvořeno pomocí Claude AI</p>
+            <p class="footer-note">💡 Tip: Pro nejlepší výsledky použijte obrázky s dobrou kvalitou a kontrastem</p>
+        </footer>
+    </div>
+
+    <!-- Tesseract.js OCR knihovna -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    
+    <!-- Vlastní JavaScript -->
+    <script src="js/ocr.js"></script>
+    <script src="js/parser.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
