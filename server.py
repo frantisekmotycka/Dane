@@ -12,6 +12,7 @@ from urllib.parse import urlparse, parse_qs
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "ocr.db")
+ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
 
 
 def ensure_db():
@@ -129,7 +130,7 @@ class AppHandler(SimpleHTTPRequestHandler):
     def end_headers(self):
         # Allow cross-origin requests from local files / other origins
         self.send_header("Cache-Control", "no-store")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS, DELETE")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         super().end_headers()
@@ -137,7 +138,7 @@ class AppHandler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         # Respond to preflight CORS requests
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS, DELETE")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Cache-Control", "no-store")
@@ -618,8 +619,10 @@ class AppHandler(SimpleHTTPRequestHandler):
 
 def run_server():
     ensure_db()
-    server = ThreadingHTTPServer(("0.0.0.0", 8000), AppHandler)
-    print("Server bezi na http://localhost:8000")
+    host = os.environ.get('HOST', '0.0.0.0')
+    port = int(os.environ.get('PORT', os.environ.get('RENDER_PORT', '8000')))
+    server = ThreadingHTTPServer((host, port), AppHandler)
+    print(f"Server bezi na http://{host}:{port}")
     server.serve_forever()
 
 
