@@ -746,11 +746,19 @@ async function loadDocumentDetail(id, editMode = false) {
                     const iframe = document.createElement('iframe');
                     iframe.style.width = '100%';
                     iframe.style.height = '600px';
-                    iframe.src = `/api/documents/${id}/file`;
+                    // If we have the base64 stored in the document, embed it directly
+                    // to avoid separate authenticated fetch (iframe won't send Authorization header).
+                    if (doc.document_base64) {
+                        iframe.src = `data:${mime};base64,${doc.document_base64}`;
+                    } else {
+                        const token = getToken();
+                        iframe.src = token ? `/api/documents/${id}/file?token=${encodeURIComponent(token)}` : `/api/documents/${id}/file`;
+                    }
                     imgDiv.appendChild(iframe);
                 } else {
                     const a = document.createElement('a');
-                    a.href = `/api/documents/${id}/file`;
+                    const token = getToken();
+                    a.href = token ? `/api/documents/${id}/file?token=${encodeURIComponent(token)}` : `/api/documents/${id}/file`;
                     a.textContent = doc.document_filename || 'Stáhnout soubor';
                     imgDiv.appendChild(a);
                 }

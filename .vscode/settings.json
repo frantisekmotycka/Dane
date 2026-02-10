@@ -9,5 +9,6 @@
             "approve": true,
             "matchCommandLine": true
         }
-    }
+    },
+    "terminal.integrated.defaultProfile.windows": "Command Prompt"
 }

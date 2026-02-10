@@ -491,7 +491,31 @@ class AppHandler(SimpleHTTPRequestHandler):
             conn.close()
 
     def handle_get_document_file(self, doc_id):
+        # Try Authorization header first
         user = self.get_current_user()
+
+        # If no user via header, allow supplying token as query parameter
+        if not user:
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query)
+            token_candidates = qs.get('token') or qs.get('t') or []
+            if token_candidates:
+                token_val = token_candidates[0]
+                if token_val:
+                    conn_check = get_db()
+                    try:
+                        row = conn_check.execute(
+                            "SELECT users.id, users.username FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token = ?",
+                            (token_val,)
+                        ).fetchone()
+                        if row:
+                            # update last_seen
+                            conn_check.execute("UPDATE sessions SET last_seen = ? WHERE token = ?", (datetime.utcnow().isoformat(), token_val))
+                            conn_check.commit()
+                            user = {"id": row["id"], "username": row["username"], "token": token_val}
+                    finally:
+                        conn_check.close()
+
         if not user:
             self.send_json({"error": "Neprihlasen"}, status=401)
             return
