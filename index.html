@@ -14,8 +14,29 @@
 <body>
     <div class="container">
         <header>
-            <h1>📄 OCR Čtečka Faktur</h1>
-            <p>Nahrajte obrázek faktury nebo účtenky a automaticky se načtou údaje</p>
+            <div class="header-center">
+                <h1>📄 OCR Čtečka Faktur</h1>
+                <p>Nahrajte obrázek faktury nebo účtenky a automaticky se načtou údaje</p>
+            </div>
+            <div class="header-right">
+                <div class="header-auth">
+                    <div id="headerAuthControls">
+                        <button id="headerLoginBtn" class="btn-link">Přihlásit</button>
+                        <button id="headerRegisterBtn" class="btn-link">Registrace</button>
+                    </div>
+
+                    <div id="headerUserMenu" style="display:none; position:relative;">
+                        <button id="headerUserBtn" class="user-btn" aria-expanded="false">
+                            <span class="user-avatar">👤</span>
+                            <span id="headerUsernameShort"></span>
+                        </button>
+                        <div id="headerDropdown" class="user-dropdown" style="display:none; position:absolute; right:0; top:40px;">
+                            <a href="profile.html" id="profileLink">Profil</a>
+                            <a href="#" id="headerDropdownLogout">Odhlásit</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </header>
 
         <section class="auth-section" id="authSection">

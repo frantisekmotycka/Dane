@@ -42,7 +42,10 @@ header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     padding: 40px 30px;
-    text-align: center;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 header h1 {
@@ -54,6 +57,101 @@ header h1 {
 header p {
     font-size: 1.1rem;
     opacity: 0.9;
+}
+
+/* Header auth controls (left) */
+.header-right {
+    position: absolute;
+    right: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+.header-auth {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-link {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.95);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+.btn-link:hover { background: rgba(255,255,255,0.06); }
+
+/* Compact auth section (hidden by default, opened from header) */
+.auth-section { display: none; }
+.auth-section.visible { display: block; }
+
+/* User button & dropdown */
+.user-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.06);
+    color: #fff;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.user-avatar { font-size: 1.05rem; }
+.user-dropdown {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    min-width: 140px;
+    overflow: hidden;
+    z-index: 60;
+}
+.user-dropdown a {
+    display: block;
+    padding: 10px 12px;
+    color: var(--text-primary);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border-color);
+}
+.user-dropdown a:hover { background: var(--bg-secondary); }
+.user-dropdown a:last-child { border-bottom: none; }
+
+/* Responsive dropdown: full-width on small screens */
+@media (max-width: 600px) {
+    header {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 20px;
+        text-align: left;
+    }
+    .header-center {
+        order: 0;
+        width: 100%;
+    }
+    .header-right {
+        position: static;
+        right: auto;
+        top: auto;
+        transform: none;
+        order: 1;
+        margin-top: 12px;
+        display: flex;
+        justify-content: flex-end;
+        width: 100%;
+    }
+    .user-dropdown {
+        position: static;
+        display: block !important;
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 8px;
+        right: 0;
+    }
+    .user-dropdown a {
+        border-bottom: 1px solid var(--border-color);
+    }
 }
 
 /* Main content */

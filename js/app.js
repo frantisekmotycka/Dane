@@ -28,6 +28,15 @@ const authUser = document.getElementById('authUser');
 const loginBtn = document.getElementById('loginBtn');
 const registerBtn = document.getElementById('registerBtn');
 const logoutBtn = document.getElementById('logoutBtn');
+const headerLoginBtn = document.getElementById('headerLoginBtn');
+const headerRegisterBtn = document.getElementById('headerRegisterBtn');
+const headerAuthControls = document.getElementById('headerAuthControls');
+const headerUserBtn = document.getElementById('headerUserBtn');
+const headerUsernameShort = document.getElementById('headerUsernameShort');
+const headerUserMenu = document.getElementById('headerUserMenu');
+const headerDropdown = document.getElementById('headerDropdown');
+const headerDropdownLogout = document.getElementById('headerDropdownLogout');
+const profileLink = document.getElementById('profileLink');
 const savedSection = document.getElementById('savedSection');
 const savedTableBody = document.getElementById('savedTableBody');
 const savedEmpty = document.getElementById('savedEmpty');
@@ -100,6 +109,58 @@ function setupEventListeners() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
+    if (headerLoginBtn) {
+        headerLoginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const as = document.getElementById('authSection');
+            if (as) {
+                as.classList.add('visible');
+                const el = document.getElementById('authUsername');
+                if (el) el.focus();
+                // Show only login action in the auth form
+                if (loginBtn) loginBtn.style.display = 'inline-block';
+                if (registerBtn) registerBtn.style.display = 'none';
+                if (authMessage) authMessage.textContent = '';
+                as.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    }
+    if (headerRegisterBtn) {
+        headerRegisterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const as = document.getElementById('authSection');
+            if (as) {
+                as.classList.add('visible');
+                const el = document.getElementById('authUsername');
+                if (el) el.focus();
+                // Show only register action in the auth form
+                if (loginBtn) loginBtn.style.display = 'none';
+                if (registerBtn) registerBtn.style.display = 'inline-block';
+                if (authMessage) authMessage.textContent = '';
+                as.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+    }
+    if (headerUserBtn) {
+        headerUserBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!headerDropdown) return;
+            const open = headerDropdown.style.display === 'block';
+            headerDropdown.style.display = open ? 'none' : 'block';
+            headerUserBtn.setAttribute('aria-expanded', String(!open));
+        });
+    }
+    if (headerDropdownLogout) {
+        headerDropdownLogout.addEventListener('click', (e) => { e.preventDefault(); if (headerDropdown) headerDropdown.style.display = 'none'; handleLogout(); });
+    }
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!headerDropdown || !headerUserBtn) return;
+        if (headerDropdown.style.display !== 'block') return;
+        if (headerUserBtn.contains(e.target) || headerDropdown.contains(e.target)) return;
+        headerDropdown.style.display = 'none';
+        headerUserBtn.setAttribute('aria-expanded', 'false');
+    });
     if (saveResultsBtn) {
         saveResultsBtn.addEventListener('click', saveResultsToDb);
     }
@@ -189,10 +250,21 @@ function updateAuthUI(user) {
             authForm.style.display = 'none';
             authStatus.style.display = 'flex';
             authUser.textContent = currentUser.username || '';
+            const as = document.getElementById('authSection'); if (as) as.classList.remove('visible');
+            // header: show user menu
+            if (headerUserMenu) headerUserMenu.style.display = 'inline-block';
+            if (headerUsernameShort) headerUsernameShort.textContent = currentUser.username || '';
+            if (headerAuthControls) headerAuthControls.style.display = 'none';
+            if (headerDropdown) headerDropdown.style.display = 'none';
         } else {
             authForm.style.display = 'grid';
             authStatus.style.display = 'none';
             authUser.textContent = '';
+            // header: show login/register
+            if (headerUserMenu) headerUserMenu.style.display = 'none';
+            if (headerUsernameShort) headerUsernameShort.textContent = '';
+            if (headerAuthControls) headerAuthControls.style.display = 'flex';
+            if (headerDropdown) headerDropdown.style.display = 'none';
         }
     }
 
@@ -861,12 +933,7 @@ async function loadDocumentDetail(id, editMode = false) {
                 saveBtn.addEventListener('click', () => updateDocument(id));
                 actionsDiv.appendChild(saveBtn);
 
-                const delBtn = document.createElement('button');
-                delBtn.className = 'btn-secondary';
-                delBtn.textContent = 'Smazat záznam';
-                delBtn.style.marginLeft = '8px';
-                delBtn.addEventListener('click', () => { if (confirm('Opravdu smazat tento záznam?')) deleteDocument(id); });
-                actionsDiv.appendChild(delBtn);
+                // delete action removed per UX request
             } else {
                 const editBtn = document.createElement('button');
                 editBtn.className = 'btn-primary';
@@ -874,12 +941,7 @@ async function loadDocumentDetail(id, editMode = false) {
                 editBtn.addEventListener('click', () => loadDocumentDetail(id, true));
                 actionsDiv.appendChild(editBtn);
 
-                const delBtn = document.createElement('button');
-                delBtn.className = 'btn-secondary';
-                delBtn.textContent = 'Smazat';
-                delBtn.style.marginLeft = '8px';
-                delBtn.addEventListener('click', () => { if (confirm('Opravdu smazat tento záznam?')) deleteDocument(id); });
-                actionsDiv.appendChild(delBtn);
+                // delete action removed per UX request
             }
 
             savedDetailGrid.appendChild(actionsDiv);

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Profil — OCR Čtečka Faktur</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="container" style="padding:24px;">
+    <header style="position:relative; text-align:left; padding:20px 24px;">
+      <a href="index.html" style="color:#fff; background:var(--primary-color); padding:8px 12px; border-radius:8px; text-decoration:none;">← Zpět</a>
+    </header>
+    <main style="padding:24px;">
+      <h2>Profil</h2>
+      <p id="status">Načítám...</p>
+      <div style="margin-top:16px;">
+        <button id="logoutBtnProfile" class="btn-secondary">Odhlásit</button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = (window.location && window.location.protocol === 'file:') ? 'http://localhost:8000' : '';
+    const token = localStorage.getItem('ocrToken');
+    const status = document.getElementById('status');
+    function showMessage(msg) { if (status) status.textContent = msg; }
+    if (!token) {
+      showMessage('Nejste přihlášen.');
+    } else {
+      fetch(`${API_BASE}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(d => {
+          if (d && d.user) {
+            showMessage(`Přihlášen jako: ${d.user.username}`);
+          } else if (d && d.error) {
+            showMessage(d.error || 'Nepodařilo se načíst profil.');
+          } else {
+            showMessage('Nepodařilo se načíst profil.');
+          }
+        }).catch(e => { showMessage('Chyba při načítání profilu.'); });
+    }
+
+    document.getElementById('logoutBtnProfile').addEventListener('click', () => {
+      localStorage.removeItem('ocrToken');
+      // Attempt to call logout endpoint
+      fetch(`${API_BASE}/api/logout`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }).finally(() => {
+        window.location.href = 'index.html';
+      });
+    });
+  </script>
+</body>
+</html>
