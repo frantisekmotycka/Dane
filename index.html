@@ -39,6 +39,16 @@
             </div>
         </header>
 
+        <!-- Main navigation -->
+        <nav class="main-nav">
+            <ul>
+                <li><button id="navLoad" class="btn-link">Načtení faktury</button></li>
+                <li><button id="navSaved" class="btn-link">Uložené faktury</button></li>
+                <li><button id="navExport" class="btn-link">Vygeneruj data</button></li>
+                <li><a href="profile.html" class="btn-link">Profil</a></li>
+            </ul>
+        </nav>
+
         <section class="auth-section" id="authSection">
             <div class="auth-card">
                 <div class="auth-header">
@@ -250,6 +260,13 @@
                     <h4>Raw OCR text</h4>
                     <pre class="saved-raw-text" id="savedDetailRaw"></pre>
                 </div>
+            </section>
+
+            <!-- Export / generated data section (empty placeholder) -->
+            <section class="export-section" id="exportSection" style="display: none; padding: 30px;">
+                <h2>📦 Vygenerovaná data</h2>
+                <p>Prozatím zde nejsou žádná data. Použijte tlačítko "Vygeneruj data" v menu.</p>
+                <div id="exportContent"></div>
             </section>
 
             <!-- Error zobrazení -->
