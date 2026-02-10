@@ -120,6 +120,8 @@ async function handleFile(file) {
         console.log('Raw OCR text preview:', ocrResult.text.substring(0, 500));
         
         let parsedResults = invoiceParser.parse(ocrResult.text);
+        // Uložíme raw OCR text do parsedResults pro zobrazení
+        parsedResults.rawText = ocrResult.text || '';
         console.log('Parsované výsledky:', parsedResults);
 
         // Výpočet chybějících hodnot
@@ -235,8 +237,8 @@ function displayResults(results, ocrConfidence) {
     // Datum
     displayResult('date', results.date);
 
-    // Raw text
-    rawText.textContent = results.rawText;
+    // Raw text - zobrazit celý rozpoznaný text (může být prázdný)
+    if (rawText) rawText.textContent = results.rawText || '';
 
     // Zobrazení sekce s výsledky
     resultsSection.style.display = 'block';
@@ -249,14 +251,33 @@ function displayResults(results, ocrConfidence) {
  * Zobrazení jednotlivého výsledku
  */
 function displayResult(elementId, data) {
-    const valueElement = document.getElementById(`${elementId}Value`);
-    const confidenceElement = document.getElementById(`${elementId}Confidence`);
+    // Podpora pro různé ID konvence v HTML (např. someValue vs some)
+    const valueElement = document.getElementById(`${elementId}Value`) || document.getElementById(elementId);
 
-    if (data && data.value) {
+    // Fallback map pro nekonzistentní názvy confidence elementů
+    const confidenceFallbacks = {
+        'totalAmount': 'totalConfidence',
+        'amountNoDph': 'amountConfidence'
+    };
+
+    const confidenceElement = document.getElementById(`${elementId}Confidence`) || document.getElementById(confidenceFallbacks[elementId]) || null;
+
+    // Debug: logovat stav elementů
+    console.log('displayResult:', elementId, { valueElement, confidenceElement });
+
+    if (!valueElement) {
+        console.warn(`Missing DOM element for ${elementId} (tried '${elementId}Value' and '${elementId}')`);
+        return;
+    }
+
+    // Podpora pro primitivní hodnoty (řetězec/číslo) nebo objekt s .value
+    const hasValue = data && (typeof data === 'string' || typeof data === 'number' || (typeof data === 'object' && data.value));
+
+    if (hasValue) {
         // Zobrazení hodnoty
-        const displayValue = data.formatted || data.value;
+        const displayValue = (typeof data === 'object') ? (data.formatted || data.value) : String(data);
         valueElement.textContent = displayValue;
-        valueElement.parentElement.classList.add('success');
+        if (valueElement.parentElement) valueElement.parentElement.classList.add('success');
 
         // Zobrazení confidence
         if (confidenceElement && data.confidence) {
@@ -271,9 +292,9 @@ function displayResult(elementId, data) {
             confidenceElement.className = `confidence ${data.confidence}`;
         }
     } else {
-        // Nenalezeno
-        valueElement.textContent = 'Nenalezeno';
-        valueElement.parentElement.classList.remove('success');
+        // Nenalezeno - zobrazit prázdný řetězec
+        valueElement.textContent = '';
+        if (valueElement.parentElement) valueElement.parentElement.classList.remove('success');
 
         if (confidenceElement) {
             confidenceElement.textContent = '';

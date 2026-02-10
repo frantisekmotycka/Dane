@@ -19,26 +19,67 @@ class OCRProcessor {
 
         try {
             console.log('Inicializuji Tesseract...');
-            
-            this.worker = await Tesseract.createWorker('ces', 1, {
-                logger: (m) => {
-                    console.log(m);
-                    // Progress bar
-                    if (m.status === 'recognizing text') {
-                        const progress = Math.round(m.progress * 100);
-                        this.updateProgress(progress);
-                    }
-                },
-                errorHandler: (err) => {
-                    console.error('Tesseract error:', err);
+
+            // vytvoření workeru (podpora různých verzí/CDN exportů)
+            let createdWorker = null;
+            try {
+                if (Tesseract && typeof Tesseract.createWorker === 'function') {
+                    createdWorker = Tesseract.createWorker({
+                        logger: (m) => {
+                            console.log(m);
+                            if (m.status === 'recognizing text') {
+                                const progress = Math.round(m.progress * 100);
+                                this.updateProgress(progress);
+                            }
+                        }
+                    });
+                } else if (typeof createWorker === 'function') {
+                    createdWorker = createWorker({
+                        logger: (m) => {
+                            console.log(m);
+                            if (m.status === 'recognizing text') {
+                                const progress = Math.round(m.progress * 100);
+                                this.updateProgress(progress);
+                            }
+                        }
+                    });
+                } else {
+                    throw new Error('Tesseract.createWorker není dostupný');
                 }
-            });
+            } catch (err) {
+                console.error('Chyba při vytvoření workeru:', err);
+                throw new Error('Nepodařilo se vytvořit Tesseract worker');
+            }
+
+            // Pokud createWorker vrátil Promise, počkáme na něj
+            if (createdWorker && typeof createdWorker.then === 'function') {
+                this.worker = await createdWorker;
+            } else {
+                this.worker = createdWorker;
+            }
+
+            // Některé buildy/varianty mohou vrátit již inicializovaný worker bez `load()`.
+            if (this.worker && typeof this.worker.load === 'function') {
+                await this.worker.load();
+                await this.worker.loadLanguage('ces');
+                await this.worker.initialize('ces');
+            } else if (this.worker && typeof this.worker.initialize === 'function' && typeof this.worker.loadLanguage === 'function') {
+                // fallback: pokud load není, ale jsou zde jiné init metody
+                await this.worker.loadLanguage('ces');
+                await this.worker.initialize('ces');
+            } else if (this.worker && typeof this.worker.recognize === 'function') {
+                // worker už může být připraven
+                console.log('Worker již připraven (přeskočeno load/initialize)');
+            } else {
+                throw new Error('Nebylo možné inicializovat Tesseract worker - chybějící metody');
+            }
 
             // Nastavení parametrů pro lepší rozpoznávání
-            await this.worker.setParameters({
-                tessedit_pageseg_mode: Tesseract.PSM.AUTO,
-                tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzáčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ .,:-/%Kč',
-            });
+            if (this.worker && typeof this.worker.setParameters === 'function') {
+                await this.worker.setParameters({
+                    tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzáčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ .,:-/%Kč'
+                });
+            }
 
             this.isInitialized = true;
             console.log('Tesseract inicializován s českým jazykem');
