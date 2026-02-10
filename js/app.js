@@ -219,23 +219,72 @@ function showPreview(file) {
 function displayResults(results, ocrConfidence) {
     console.log('Zobrazuji výsledky:', results);
 
-    // IČO
-    displayResult('ico', results.ico);
+    // Helper to set table cell values and apply confidence coloring + edit handler
+    function setTableCell(cellId, confId, data, resultsKey) {
+        const cell = document.getElementById(cellId);
+        const conf = document.getElementById(confId);
+        if (!cell) return;
 
-    // Celková částka
-    displayResult('totalAmount', results.totalAmount);
+        const hasValue = data && (typeof data === 'string' || typeof data === 'number' || (typeof data === 'object' && (data.value || data.formatted)));
+        const displayValue = hasValue ? (typeof data === 'object' ? (data.formatted || data.value) : String(data)) : '';
 
-    // Částka bez DPH
-    displayResult('amountNoDph', results.amountWithoutVat);
+        // Update cell text
+        cell.textContent = displayValue;
 
-    // DPH sazba
-    displayResult('dphRate', results.vatRate);
+        // Clear classes
+        cell.classList.remove('cell-high', 'cell-medium', 'cell-low', 'cell-missing');
+        if (conf) conf.className = 'conf-badge';
 
-    // DPH částka
-    displayResult('dphAmount', results.vatAmount);
+        // Determine confidence
+        let confKey = data && data.confidence ? data.confidence : (hasValue ? 'medium' : 'missing');
+        if (confKey === 'calculated') confKey = 'medium';
 
-    // Datum
-    displayResult('date', results.date);
+        if (!hasValue) {
+            cell.classList.add('cell-missing');
+            if (conf) { conf.textContent = 'Nenalezeno'; conf.classList.add('low'); }
+        } else if (confKey === 'high') {
+            cell.classList.add('cell-high');
+            if (conf) { conf.textContent = 'Vysoká spolehlivost'; conf.classList.add('high'); }
+        } else if (confKey === 'medium') {
+            cell.classList.add('cell-medium');
+            if (conf) { conf.textContent = 'Střední spolehlivost'; conf.classList.add('medium'); }
+        } else {
+            cell.classList.add('cell-low');
+            if (conf) { conf.textContent = 'Nízká spolehlivost'; conf.classList.add('low'); }
+        }
+
+        // Ensure editable
+        cell.setAttribute('contenteditable', 'true');
+
+        // On blur, save edited value back to currentResults
+        cell.onblur = () => {
+            const newVal = cell.textContent.trim();
+            if (!currentResults) currentResults = {};
+            // Save as simple object to preserve formatting
+            if (resultsKey) {
+                currentResults[resultsKey] = { value: newVal, confidence: 'edited', formatted: newVal };
+            }
+        };
+    }
+
+    // Map fields into table
+    const supplierIcData = results.supplierIc || results.supplierIco || (results.supplier && (results.supplier.value || results.supplier)) || results.ico || results.ic || null;
+    setTableCell('cell-supplier-ic', 'conf-supplier-ic', supplierIcData, 'supplierIc');
+
+    const recipientIcData = results.recipientIc || results.recipientIco || null;
+    setTableCell('cell-recipient-ic', 'conf-recipient-ic', recipientIcData, 'recipientIc');
+
+    const supplierDicData = results.supplierDic || (results.supplier && (results.supplier.dic || results.supplier.DIC)) || results.dic || null;
+    setTableCell('cell-supplier-dic', 'conf-supplier-dic', supplierDicData, 'supplierDic');
+
+    const recipientDicData = results.recipientDic || results.buyerDic || (results.recipient && (results.recipient.dic || results.recipient.DIC)) || results.dic || null;
+    setTableCell('cell-recipient-dic', 'conf-recipient-dic', recipientDicData, 'recipientDic');
+
+    setTableCell('cell-total-amount', 'conf-total-amount', results.totalAmount, 'totalAmount');
+    setTableCell('cell-amount-nodph', 'conf-amount-nodph', results.amountWithoutVat, 'amountWithoutVat');
+    setTableCell('cell-dph-rate', 'conf-dph-rate', results.vatRate, 'vatRate');
+    setTableCell('cell-dph-amount', 'conf-dph-amount', results.vatAmount, 'vatAmount');
+    setTableCell('cell-date', 'conf-date', results.date, 'date');
 
     // Raw text - zobrazit celý rozpoznaný text (může být prázdný)
     if (rawText) rawText.textContent = results.rawText || '';
@@ -323,12 +372,14 @@ function copyResults() {
 📄 VÝSLEDKY OCR ČTENÍ FAKTURY
 ================================
 
-🏢 IČO: ${currentResults.ico?.value || 'Nenalezeno'}
-💰 Celková částka: ${currentResults.totalAmount?.formatted || 'Nenalezeno'}
-💵 Částka bez DPH: ${currentResults.amountWithoutVat?.formatted || 'Nenalezeno'}
-📊 DPH sazba: ${currentResults.vatRate?.formatted || 'Nenalezeno'}
-💳 Částka DPH: ${currentResults.vatAmount?.formatted || 'Nenalezeno'}
-📅 Datum: ${currentResults.date?.value || 'Nenalezeno'}
+🏢 IČ: ${currentResults.ic?.value || currentResults.ic || currentResults.ico?.value || currentResults.ico || ''}
+🔖 DIČ dodavatele: ${currentResults.supplierDic?.value || currentResults.supplierDic || currentResults.supplier?.dic || currentResults.supplier?.DIC || ''}
+📛 DIČ odběratele: ${currentResults.recipientDic?.value || currentResults.recipientDic || currentResults.recipient?.dic || currentResults.recipient?.DIC || ''}
+💰 Celková částka: ${currentResults.totalAmount?.formatted || ''}
+💵 Částka bez DPH: ${currentResults.amountWithoutVat?.formatted || ''}
+📊 DPH sazba: ${currentResults.vatRate?.formatted || ''}
+💳 Částka DPH: ${currentResults.vatAmount?.formatted || ''}
+📅 Datum: ${currentResults.date?.value || ''}
 
 ================================
 Vygenerováno: ${new Date().toLocaleString('cs-CZ')}

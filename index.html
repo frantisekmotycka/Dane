@@ -51,67 +51,63 @@
             <!-- Výsledky OCR -->
             <div class="results-section" id="resultsSection" style="display: none;">
                 <h2>✅ Načtené údaje</h2>
-                
                 <div class="result-grid">
-                    <!-- IČO -->
-                    <div class="result-card">
-                        <div class="result-label">
-                            <span class="icon">🏢</span>
-                            <span>IČO</span>
-                        </div>
-                        <div class="result-value" id="icoValue">Nenalezeno</div>
-                        <div class="confidence" id="icoConfidence"></div>
-                    </div>
-
-                    <!-- Celková částka -->
-                    <div class="result-card highlight">
-                        <div class="result-label">
-                            <span class="icon">💰</span>
-                            <span>Celková částka</span>
-                        </div>
-                        <div class="result-value large" id="totalAmount">Nenalezeno</div>
-                        <div class="confidence" id="totalConfidence"></div>
-                    </div>
-
-                    <!-- Částka bez DPH -->
-                    <div class="result-card">
-                        <div class="result-label">
-                            <span class="icon">💵</span>
-                            <span>Částka bez DPH</span>
-                        </div>
-                        <div class="result-value" id="amountNoDph">Nenalezeno</div>
-                        <div class="confidence" id="amountConfidence"></div>
-                    </div>
-
-                    <!-- DPH sazba -->
-                    <div class="result-card">
-                        <div class="result-label">
-                            <span class="icon">📊</span>
-                            <span>DPH sazba</span>
-                        </div>
-                        <div class="result-value" id="dphRate">Nenalezeno</div>
-                        <div class="confidence" id="dphRateConfidence"></div>
-                    </div>
-
-                    <!-- DPH částka -->
-                    <div class="result-card">
-                        <div class="result-label">
-                            <span class="icon">💳</span>
-                            <span>Částka DPH</span>
-                        </div>
-                        <div class="result-value" id="dphAmount">Nenalezeno</div>
-                        <div class="confidence" id="dphAmountConfidence"></div>
-                    </div>
-
-                    <!-- Datum -->
-                    <div class="result-card">
-                        <div class="result-label">
-                            <span class="icon">📅</span>
-                            <span>Datum vystavení</span>
-                        </div>
-                        <div class="result-value" id="dateValue">Nenalezeno</div>
-                        <div class="confidence" id="dateConfidence"></div>
-                    </div>
+                    <table class="results-table" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Pole</th>
+                                <th>Hodnota</th>
+                                <th>Spolehlivost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>IČ dodavatele</td>
+                                <td id="cell-supplier-ic" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-supplier-ic" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>IČ odběratele</td>
+                                <td id="cell-recipient-ic" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-recipient-ic" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>DIČ dodavatele</td>
+                                <td id="cell-supplier-dic" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-supplier-dic" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>DIČ odběratele</td>
+                                <td id="cell-recipient-dic" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-recipient-dic" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>Celková částka</td>
+                                <td id="cell-total-amount" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-total-amount" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>Částka bez DPH</td>
+                                <td id="cell-amount-nodph" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-amount-nodph" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>DPH sazba</td>
+                                <td id="cell-dph-rate" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-dph-rate" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>Částka DPH</td>
+                                <td id="cell-dph-amount" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-dph-amount" class="conf-badge"></span></td>
+                            </tr>
+                            <tr>
+                                <td>Datum vystavení</td>
+                                <td id="cell-date" class="value-cell" contenteditable="true"></td>
+                                <td><span id="conf-date" class="conf-badge"></span></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
                 <!-- Raw OCR text -->
@@ -142,7 +138,7 @@
         </main>
 
         <footer>
-            <p>OCR Engine: Tesseract.js | Vytvořeno pomocí Claude AI</p>
+            <p>OCR Engine: Tesseract.js</p>
             <p class="footer-note">💡 Tip: Pro nejlepší výsledky použijte obrázky s dobrou kvalitou a kontrastem</p>
         </footer>
     </div>

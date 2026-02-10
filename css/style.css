@@ -436,3 +436,56 @@ footer p {
 .result-card.success {
     animation: successPulse 0.5s ease;
 }
+
+/* Compact results table */
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.results-table th,
+.results-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.95rem;
+}
+.results-table th {
+    background: #fff;
+    color: var(--text-secondary);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.6px;
+}
+.results-table td.value-cell {
+    font-weight: 700;
+    color: var(--text-primary);
+    width: 45%;
+}
+
+/* confidence coloring */
+.cell-high { background: rgba(16,185,129,0.08); border-left: 4px solid var(--success-color); }
+.cell-medium { background: rgba(245,158,11,0.06); border-left: 4px solid var(--warning-color); }
+.cell-low { background: rgba(239,68,68,0.06); border-left: 4px solid var(--error-color); }
+.cell-missing { background: rgba(239,68,68,0.04); border-left: 4px dashed rgba(239,68,68,0.6); }
+
+.value-cell[contenteditable="true"]:focus {
+    outline: 2px solid rgba(37,99,235,0.12);
+    background: #fff;
+}
+
+.conf-badge {
+    font-size: 0.8rem;
+    padding: 4px 8px;
+    border-radius: 999px;
+    display: inline-block;
+    margin-left: 8px;
+}
+.conf-badge.high { background: rgba(16,185,129,0.12); color: var(--success-color); }
+.conf-badge.medium { background: rgba(245,158,11,0.08); color: var(--warning-color); }
+.conf-badge.low { background: rgba(239,68,68,0.08); color: var(--error-color); }
+
