@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Debug Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .found {
+            color: green;
+            font-weight: bold;
+        }
+        .not-found {
+            color: red;
+        }
+        pre {
+            background: #f0f0f0;
+            padding: 10px;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 OCR Parser Debug Test</h1>
+        <p>Test parsování dat z ukázkové faktury</p>
+        
+        <button onclick="testParser()">🧪 Spustit test</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script src="js/parser.js"></script>
+    <script>
+        // Ukázkový text z faktury (simulace OCR výstupu)
+        const sampleText = `
+Faktura
+Dodavatel: Odběratel:
+Mgr. František Motyčka
+Žižkov II 1204
+Havlíčkův Brod LLP CRM, s.r.o
+Českomoravská 2420/15
+DIČ: CZ8101082979 19093, Praha 9
+IČ: 87238454
+IČ: 04365259, DIČ: CZ04365259
+Platební podmínky:
+Datum vystavení: 29.3.2016
+Forma úhrady Bankovním převodem
+Bankovní spojení: Česká spořitelna Datum splatnosti: 12.4.2016
+Číslo účtu: 1207260023/0800
+Variabilní symbol: 20160001
+Fakturuji Vám:
+Cena bez DPH: DPH
+374 400,00 Kč 78 624,00 Kč
+Celkem k úhradě: 453 024,00 Kč
+453 024,00 Kč
+Na základě Vaší objednávky OBJEDNÁVKA_MOTYCKA_04_2016 Vám zasílám fakturu za integraci tel. Ústředny 
+Daktela s MS CRM 2016
+číslo: 20160001
+Celkem
+        `;
+
+        function testParser() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<h2>⏳ Spouštím parsování...</h2>';
+            
+            // Parsování
+            const results = invoiceParser.parse(sampleText);
+            
+            // Zobrazení výsledků
+            let html = '<h2>✅ Výsledky parsování:</h2>';
+            
+            // IČO
+            html += '<div class="result">';
+            html += '<h3>🏢 IČO:</h3>';
+            if (results.ico) {
+                html += `<p class="found">✓ Nalezeno: ${results.ico.value}</p>`;
+                html += `<p>Confidence: ${results.ico.confidence}</p>`;
+                html += `<p>Raw: ${results.ico.raw}</p>`;
+            } else {
+                html += '<p class="not-found">✗ Nenalezeno</p>';
+            }
+            html += '</div>';
+            
+            // Celková částka
+            html += '<div class="result">';
+            html += '<h3>💰 Celková částka:</h3>';
+            if (results.totalAmount) {
+                html += `<p class="found">✓ Nalezeno: ${results.totalAmount.formatted}</p>`;
+                html += `<p>Hodnota: ${results.totalAmount.value}</p>`;
+                html += `<p>Confidence: ${results.totalAmount.confidence}</p>`;
+            } else {
+                html += '<p class="not-found">✗ Nenalezeno</p>';
+            }
+            html += '</div>';
+            
+            // Částka bez DPH
+            html += '<div class="result">';
+            html += '<h3>💵 Částka bez DPH:</h3>';
+            if (results.amountWithoutVat) {
+                html += `<p class="found">✓ Nalezeno: ${results.amountWithoutVat.formatted}</p>`;
+                html += `<p>Hodnota: ${results.amountWithoutVat.value}</p>`;
+            } else {
+                html += '<p class="not-found">✗ Nenalezeno</p>';
+            }
+            html += '</div>';
+            
+            // DPH částka
+            html += '<div class="result">';
+            html += '<h3>💳 DPH částka:</h3>';
+            if (results.vatAmount) {
+                html += `<p class="found">✓ Nalezeno: ${results.vatAmount.formatted}</p>`;
+                html += `<p>Hodnota: ${results.vatAmount.value}</p>`;
+            } else {
+                html += '<p class="not-found">✗ Nenalezeno</p>';
+            }
+            html += '</div>';
+            
+            // Datum
+            html += '<div class="result">';
+            html += '<h3>📅 Datum:</h3>';
+            if (results.date) {
+                html += `<p class="found">✓ Nalezeno: ${results.date.value}</p>`;
+            } else {
+                html += '<p class="not-found">✗ Nenalezeno</p>';
+            }
+            html += '</div>';
+            
+            // Raw data
+            html += '<div class="result">';
+            html += '<h3>📝 Kompletní výsledky:</h3>';
+            html += '<pre>' + JSON.stringify(results, null, 2) + '</pre>';
+            html += '</div>';
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        // Auto-spuštění při načtení
+        window.addEventListener('load', () => {
+            setTimeout(testParser, 500);
+        });
+    </script>
+</body>
+</html>
