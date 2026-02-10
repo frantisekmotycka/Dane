@@ -274,6 +274,9 @@ function displayResults(results, ocrConfidence) {
     const recipientIcData = results.recipientIc || results.recipientIco || null;
     setTableCell('cell-recipient-ic', 'conf-recipient-ic', recipientIcData, 'recipientIc');
 
+    // Invoice / document number
+    setTableCell('cell-invoice-number', 'conf-invoice-number', results.invoiceNumber || null, 'invoiceNumber');
+
     const supplierDicData = results.supplierDic || (results.supplier && (results.supplier.dic || results.supplier.DIC)) || results.dic || null;
     setTableCell('cell-supplier-dic', 'conf-supplier-dic', supplierDicData, 'supplierDic');
 

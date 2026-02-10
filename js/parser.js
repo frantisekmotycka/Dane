@@ -71,6 +71,7 @@ class InvoiceParser {
         
         const results = {
             ico: this.findICO(ocrText),
+            invoiceNumber: this.findInvoiceNumber(ocrText),
             dic: this.findDIC(ocrText),
             // supplier/recipient specific fields
             supplierIc: this.findSupplierICO(ocrText),
@@ -694,6 +695,41 @@ class InvoiceParser {
                 };
             }
         }
+        return null;
+    }
+
+    /**
+     * Najde číslo dokladu / faktury
+     */
+    findInvoiceNumber(text) {
+        // Common patterns: "Faktura číslo: 12345", "Faktura č.: 12345", "Faktura č. 12345", "Číslo dokladu: 12345"
+        const patterns = [
+            /Faktura(?:\s+č(?:íslo|\.)?)?[:\s]*([A-Za-z0-9\-\/]+)|Faktura\s+č\.?:?\s*([A-Za-z0-9\-\/]+)/gi,
+            /Číslo\s*(?:dokladu|faktury)[:\s]*([A-Za-z0-9\-\/]+)/gi,
+            /Invoice\s*No[:\s]*([A-Za-z0-9\-\/]+)/gi,
+            /Variabiln(?:í|y)\s*symbol[:\s]*([0-9A-Za-z\-\/]+)/gi
+        ];
+
+        for (const p of patterns) {
+            const m = p.exec(text);
+            if (m) {
+                // return first non-empty capture group
+                for (let i = 1; i < m.length; i++) {
+                    if (m[i]) return m[i].trim();
+                }
+            }
+        }
+
+        // Fallback: try to find a line starting with "Faktura" and extract trailing token
+        const lines = text.split(/\r?\n/);
+        for (const line of lines) {
+            const l = line.trim();
+            if (/^Faktura/i.test(l) && l.match(/\d/)) {
+                const m = l.match(/(\d{4,}|[A-Za-z0-9\-\/]+)/);
+                if (m) return m[0];
+            }
+        }
+
         return null;
     }
 
