@@ -1,0 +1,8 @@
+HTTP/1.0 404 Not Found
+Server: SimpleHTTP/0.6 Python/3.14.3
+Date: Tue, 10 Feb 2026 12:57:15 GMT
+Content-Type: application/json; charset=utf-8
+Content-Length: 22
+Cache-Control: no-store
+
+{"error": "Not Found"}

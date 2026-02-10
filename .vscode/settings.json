@@ -1,5 +1,13 @@
 {
     "chat.tools.terminal.autoApprove": {
-        "Start-Process": true
+        "Start-Process": true,
+        "/^powershell -NoProfile -Command \"Invoke-RestMethod -Uri http://localhost:8000/api/health -Method Get -ContentType 'application/json' -ErrorAction Stop \\| ConvertTo-Json -Compress\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^powershell -NoProfile -Command \"Invoke-RestMethod -Uri http://localhost:8000/api/register -Method Post -Body \\(ConvertTo-Json @\\{username='f'; password='p'\\}\\) -ContentType 'application/json' -ErrorAction Stop \\| ConvertTo-Json -Compress\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

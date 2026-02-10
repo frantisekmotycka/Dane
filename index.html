@@ -18,6 +18,36 @@
             <p>Nahrajte obrázek faktury nebo účtenky a automaticky se načtou údaje</p>
         </header>
 
+        <section class="auth-section" id="authSection">
+            <div class="auth-card">
+                <div class="auth-header">
+                    <h2>🔐 Přihlášení</h2>
+                    <p>Uložte a spravujte výsledky podle uživatele</p>
+                </div>
+                <form class="auth-form" id="authForm">
+                    <div class="form-row">
+                        <label for="authUsername">Uživatelské jméno</label>
+                        <input type="text" id="authUsername" name="username" autocomplete="username" required>
+                    </div>
+                    <div class="form-row">
+                        <label for="authPassword">Heslo</label>
+                        <input type="password" id="authPassword" name="password" autocomplete="current-password" required>
+                    </div>
+                    <div class="auth-actions">
+                        <button class="btn-primary" type="submit" id="loginBtn">Přihlásit</button>
+                        <button class="btn-secondary" type="button" id="registerBtn">Vytvořit účet</button>
+                    </div>
+                    <p class="auth-message" id="authMessage"></p>
+                </form>
+                <div class="auth-status" id="authStatus" style="display: none;">
+                    <div>
+                        Přihlášen jako <strong id="authUser"></strong>
+                    </div>
+                    <button class="btn-secondary" type="button" id="logoutBtn">Odhlásit</button>
+                </div>
+            </div>
+        </section>
+
         <main>
             <!-- Upload sekce -->
             <div class="upload-section">
@@ -125,9 +155,81 @@
                 <!-- Akce -->
                 <div class="actions">
                     <button class="btn-primary" onclick="copyResults()">📋 Kopírovat výsledky</button>
+                    <button class="btn-primary" id="saveResultsBtn" type="button">💾 Uložit do databáze</button>
                     <button class="btn-secondary" onclick="resetForm()">🔄 Nahrát další</button>
                 </div>
             </div>
+
+            <section class="saved-section" id="savedSection" style="display: none;">
+                <h2>📚 Uložené faktury</h2>
+                <div class="filters">
+                    <div class="filter-grid">
+                        <div class="form-row">
+                            <label for="filterSearch">Hledat</label>
+                            <input type="text" id="filterSearch" placeholder="IČO, číslo faktury, poznámka">
+                        </div>
+                        <div class="form-row">
+                            <label for="filterSupplierIc">IČ dodavatele</label>
+                            <input type="text" id="filterSupplierIc" placeholder="12345678">
+                        </div>
+                        <div class="form-row">
+                            <label for="filterRecipientIc">IČ odběratele</label>
+                            <input type="text" id="filterRecipientIc" placeholder="87654321">
+                        </div>
+                        <div class="form-row">
+                            <label for="filterInvoiceNumber">Číslo faktury</label>
+                            <input type="text" id="filterInvoiceNumber" placeholder="2024-001">
+                        </div>
+                        <div class="form-row">
+                            <label for="filterDateFrom">Datum od</label>
+                            <input type="date" id="filterDateFrom">
+                        </div>
+                        <div class="form-row">
+                            <label for="filterDateTo">Datum do</label>
+                            <input type="date" id="filterDateTo">
+                        </div>
+                        <div class="form-row">
+                            <label for="filterMinTotal">Celkem od (Kč)</label>
+                            <input type="number" id="filterMinTotal" step="0.01" min="0">
+                        </div>
+                        <div class="form-row">
+                            <label for="filterMaxTotal">Celkem do (Kč)</label>
+                            <input type="number" id="filterMaxTotal" step="0.01" min="0">
+                        </div>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn-primary" type="button" id="filterApplyBtn">Filtrovat</button>
+                        <button class="btn-secondary" type="button" id="filterResetBtn">Reset</button>
+                    </div>
+                </div>
+
+                <div class="saved-table-wrap">
+                    <table class="saved-table" id="savedTable">
+                        <thead>
+                            <tr>
+                                <th>Datum</th>
+                                <th>Číslo faktury</th>
+                                <th>IČ dodavatele</th>
+                                <th>IČ odběratele</th>
+                                <th>Celkem</th>
+                                <th>Akce</th>
+                            </tr>
+                        </thead>
+                        <tbody id="savedTableBody"></tbody>
+                    </table>
+                    <p class="saved-empty" id="savedEmpty" style="display: none;">Zatím nemáte uložené žádné faktury.</p>
+                </div>
+
+                <div class="saved-detail" id="savedDetail" style="display: none;">
+                    <div class="saved-detail-header">
+                        <h3>Detail uložené faktury</h3>
+                        <button class="btn-secondary" type="button" id="closeDetailBtn">Zavřít detail</button>
+                    </div>
+                    <div class="saved-detail-grid" id="savedDetailGrid"></div>
+                    <h4>Raw OCR text</h4>
+                    <pre class="saved-raw-text" id="savedDetailRaw"></pre>
+                </div>
+            </section>
 
             <!-- Error zobrazení -->
             <div class="error-section" id="errorSection" style="display: none;">
