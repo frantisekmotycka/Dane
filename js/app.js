@@ -625,6 +625,73 @@ function formatCurrency(value) {
     }).format(value);
 }
 
+function openOriginalInWindow(url) {
+    // If it's a data: URI, convert to a Blob and use an object URL (more reliable than data: in some browsers)
+    const isData = typeof url === 'string' && url.startsWith('data:');
+    if (isData) {
+        try {
+            const parts = url.split(',');
+            const meta = parts[0];
+            const isBase64 = meta.indexOf(';base64') !== -1;
+            const mime = meta.split(':')[1].split(';')[0] || 'application/octet-stream';
+            const dataPart = parts.slice(1).join(',');
+            let bytes;
+            if (isBase64) {
+                const bin = atob(dataPart);
+                const len = bin.length;
+                const arr = new Uint8Array(len);
+                for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+                bytes = arr;
+            } else {
+                const str = decodeURIComponent(dataPart);
+                const len = str.length;
+                const arr = new Uint8Array(len);
+                for (let i = 0; i < len; i++) arr[i] = str.charCodeAt(i);
+                bytes = arr;
+            }
+            const blob = new Blob([bytes], { type: mime });
+            const objUrl = URL.createObjectURL(blob);
+            // Try opening in a new tab/window without features (more compatible)
+            const newWin = window.open(objUrl, '_blank');
+            if (!newWin) {
+                // popup blocked, use anchor click fallback
+                const a = document.createElement('a');
+                a.href = objUrl;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                try { newWin.focus(); } catch (e) { /* ignore */ }
+            }
+            // Revoke object URL after a while
+            setTimeout(() => URL.revokeObjectURL(objUrl), 60 * 1000);
+            return;
+        } catch (e) {
+            console.warn('Failed to open data URI via object URL, falling back', e);
+        }
+    }
+
+    // For normal URLs, open in a new tab. Avoid complex window features to reduce popup issues.
+    try {
+        const newWin = window.open(url, '_blank');
+        if (!newWin) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } else {
+            try { newWin.focus(); } catch (e) { /* ignore */ }
+        }
+    } catch (e) {
+        try { window.open(url, '_blank'); } catch (err) { console.error('Unable to open window', err); }
+    }
+}
+
 function collectFilters() {
     return {
         search: filterSearch ? filterSearch.value.trim() : '',
@@ -740,26 +807,42 @@ async function loadDocumentDetail(id, editMode = false) {
                 if (mime.startsWith('image/')) {
                     const img = document.createElement('img');
                     img.style.maxWidth = '100%';
-                    img.src = `data:${mime};base64,${doc.document_base64}`;
+                    img.style.cursor = 'pointer';
+                    const url = `data:${mime};base64,${doc.document_base64}`;
+                    img.src = url;
+                    img.addEventListener('click', () => openOriginalInWindow(url));
+                    img.setAttribute('alt', doc.document_filename || 'Originál');
                     imgDiv.appendChild(img);
                 } else if (mime === 'application/pdf') {
+                    // Wrap iframe in a relative container and put a transparent overlay to capture clicks
+                    const wrapper = document.createElement('div');
+                    wrapper.style.position = 'relative';
                     const iframe = document.createElement('iframe');
                     iframe.style.width = '100%';
                     iframe.style.height = '600px';
-                    // If we have the base64 stored in the document, embed it directly
-                    // to avoid separate authenticated fetch (iframe won't send Authorization header).
-                    if (doc.document_base64) {
-                        iframe.src = `data:${mime};base64,${doc.document_base64}`;
-                    } else {
-                        const token = getToken();
-                        iframe.src = token ? `/api/documents/${id}/file?token=${encodeURIComponent(token)}` : `/api/documents/${id}/file`;
-                    }
-                    imgDiv.appendChild(iframe);
+                    // show embedded PDF when base64 present, otherwise use authenticated endpoint
+                    const pdfUrl = doc.document_base64 ? `data:${mime};base64,${doc.document_base64}` : (getToken() ? `/api/documents/${id}/file?token=${encodeURIComponent(getToken())}` : `/api/documents/${id}/file`);
+                    iframe.src = pdfUrl;
+                    wrapper.appendChild(iframe);
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'absolute';
+                    overlay.style.left = '0';
+                    overlay.style.top = '0';
+                    overlay.style.width = '100%';
+                    overlay.style.height = '100%';
+                    overlay.style.cursor = 'pointer';
+                    overlay.title = 'Otevřít originál v novém okně';
+                    overlay.addEventListener('click', () => openOriginalInWindow(pdfUrl));
+                    wrapper.appendChild(overlay);
+                    imgDiv.appendChild(wrapper);
                 } else {
-                    const a = document.createElement('a');
                     const token = getToken();
-                    a.href = token ? `/api/documents/${id}/file?token=${encodeURIComponent(token)}` : `/api/documents/${id}/file`;
+                    const fileUrl = token ? `/api/documents/${id}/file?token=${encodeURIComponent(token)}` : `/api/documents/${id}/file`;
+                    const a = document.createElement('a');
+                    a.href = fileUrl;
                     a.textContent = doc.document_filename || 'Stáhnout soubor';
+                    a.target = '_blank';
+                    a.rel = 'noopener';
                     imgDiv.appendChild(a);
                 }
                 savedDetailGrid.appendChild(imgDiv);
