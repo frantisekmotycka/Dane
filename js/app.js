@@ -861,12 +861,7 @@ async function loadDocumentDetail(id, editMode = false) {
                 saveBtn.addEventListener('click', () => updateDocument(id));
                 actionsDiv.appendChild(saveBtn);
 
-                const delBtn = document.createElement('button');
-                delBtn.className = 'btn-secondary';
-                delBtn.textContent = 'Smazat záznam';
-                delBtn.style.marginLeft = '8px';
-                delBtn.addEventListener('click', () => { if (confirm('Opravdu smazat tento záznam?')) deleteDocument(id); });
-                actionsDiv.appendChild(delBtn);
+                // delete action removed per UX request
             } else {
                 const editBtn = document.createElement('button');
                 editBtn.className = 'btn-primary';
@@ -874,12 +869,7 @@ async function loadDocumentDetail(id, editMode = false) {
                 editBtn.addEventListener('click', () => loadDocumentDetail(id, true));
                 actionsDiv.appendChild(editBtn);
 
-                const delBtn = document.createElement('button');
-                delBtn.className = 'btn-secondary';
-                delBtn.textContent = 'Smazat';
-                delBtn.style.marginLeft = '8px';
-                delBtn.addEventListener('click', () => { if (confirm('Opravdu smazat tento záznam?')) deleteDocument(id); });
-                actionsDiv.appendChild(delBtn);
+                // delete action removed per UX request
             }
 
             savedDetailGrid.appendChild(actionsDiv);
