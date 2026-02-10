@@ -5,6 +5,10 @@
 
 // Globální proměnné
 let currentResults = null;
+let currentFileName = '';
+let currentOcrText = '';
+let currentUser = null;
+let currentFileBlob = null;
 
 // DOM elementy
 const uploadArea = document.getElementById('uploadArea');
@@ -16,6 +20,31 @@ const resultsSection = document.getElementById('resultsSection');
 const errorSection = document.getElementById('errorSection');
 const errorMessage = document.getElementById('errorMessage');
 const rawText = document.getElementById('rawText');
+const saveResultsBtn = document.getElementById('saveResultsBtn');
+const authForm = document.getElementById('authForm');
+const authMessage = document.getElementById('authMessage');
+const authStatus = document.getElementById('authStatus');
+const authUser = document.getElementById('authUser');
+const loginBtn = document.getElementById('loginBtn');
+const registerBtn = document.getElementById('registerBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const savedSection = document.getElementById('savedSection');
+const savedTableBody = document.getElementById('savedTableBody');
+const savedEmpty = document.getElementById('savedEmpty');
+const filterApplyBtn = document.getElementById('filterApplyBtn');
+const filterResetBtn = document.getElementById('filterResetBtn');
+const filterSearch = document.getElementById('filterSearch');
+const filterSupplierIc = document.getElementById('filterSupplierIc');
+const filterRecipientIc = document.getElementById('filterRecipientIc');
+const filterInvoiceNumber = document.getElementById('filterInvoiceNumber');
+const filterDateFrom = document.getElementById('filterDateFrom');
+const filterDateTo = document.getElementById('filterDateTo');
+const filterMinTotal = document.getElementById('filterMinTotal');
+const filterMaxTotal = document.getElementById('filterMaxTotal');
+const savedDetail = document.getElementById('savedDetail');
+const savedDetailGrid = document.getElementById('savedDetailGrid');
+const savedDetailRaw = document.getElementById('savedDetailRaw');
+const closeDetailBtn = document.getElementById('closeDetailBtn');
 
 /**
  * Inicializace aplikace
@@ -23,6 +52,7 @@ const rawText = document.getElementById('rawText');
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Aplikace inicializována');
     setupEventListeners();
+    initAuth();
 });
 
 /**
@@ -60,6 +90,197 @@ function setupEventListeners() {
         }
         fileInput.click();
     });
+
+    if (authForm) {
+        authForm.addEventListener('submit', handleLogin);
+    }
+    if (registerBtn) {
+        registerBtn.addEventListener('click', handleRegister);
+    }
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+    if (saveResultsBtn) {
+        saveResultsBtn.addEventListener('click', saveResultsToDb);
+    }
+    if (filterApplyBtn) {
+        filterApplyBtn.addEventListener('click', () => loadSavedDocuments());
+    }
+    if (filterResetBtn) {
+        filterResetBtn.addEventListener('click', resetFilters);
+    }
+    if (closeDetailBtn) {
+        closeDetailBtn.addEventListener('click', () => {
+            if (savedDetail) savedDetail.style.display = 'none';
+        });
+    }
+}
+
+// Pokud je stránka otevřena přes file://, nastavíme explicitně localhost server
+const API_BASE = (window.location && window.location.protocol === 'file:') ? 'http://localhost:8000' : '';
+
+function getToken() {
+    return localStorage.getItem('ocrToken');
+}
+
+function setToken(token) {
+    if (token) {
+        localStorage.setItem('ocrToken', token);
+    } else {
+        localStorage.removeItem('ocrToken');
+    }
+}
+
+function setAuthMessage(message, type = '') {
+    if (!authMessage) return;
+    authMessage.textContent = message || '';
+    authMessage.className = 'auth-message';
+    if (type) authMessage.classList.add(type);
+}
+
+async function apiFetch(path, options = {}) {
+    const headers = options.headers ? { ...options.headers } : {};
+    const token = getToken();
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers
+    });
+
+    let data = null;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+        data = await response.json();
+    }
+
+    if (!response.ok) {
+        const errorMsg = (data && data.error) ? data.error : 'Chyba komunikace se serverem';
+        throw new Error(errorMsg);
+    }
+    return data;
+}
+
+async function initAuth() {
+    const token = getToken();
+    if (!token) {
+        updateAuthUI(null);
+        return;
+    }
+
+    try {
+        const data = await apiFetch('/api/me');
+        updateAuthUI(data.user);
+        await loadSavedDocuments();
+    } catch (err) {
+        console.warn('Token není platný:', err);
+        setToken(null);
+        updateAuthUI(null);
+    }
+}
+
+function updateAuthUI(user) {
+    currentUser = user || null;
+
+    if (authForm && authStatus && authUser) {
+        if (currentUser) {
+            authForm.style.display = 'none';
+            authStatus.style.display = 'flex';
+            authUser.textContent = currentUser.username || '';
+        } else {
+            authForm.style.display = 'grid';
+            authStatus.style.display = 'none';
+            authUser.textContent = '';
+        }
+    }
+
+    if (savedSection) {
+        savedSection.style.display = currentUser ? 'block' : 'none';
+    }
+    if (saveResultsBtn) {
+        saveResultsBtn.disabled = !currentUser;
+        saveResultsBtn.title = currentUser ? '' : 'Pro uložení se nejprve přihlaste.';
+    }
+}
+
+async function handleLogin(event) {
+    event.preventDefault();
+    const username = (document.getElementById('authUsername') || {}).value || '';
+    const password = (document.getElementById('authPassword') || {}).value || '';
+
+    setAuthMessage('Přihlašuji...', '');
+
+    try {
+        const data = await apiFetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        setToken(data.token);
+        setAuthMessage('Úspěšně přihlášeno.', 'success');
+        updateAuthUI(data.user);
+        await loadSavedDocuments();
+    } catch (err) {
+        setAuthMessage(err.message || 'Nepodařilo se přihlásit.', 'error');
+    }
+}
+
+async function handleRegister() {
+    const username = (document.getElementById('authUsername') || {}).value || '';
+    const password = (document.getElementById('authPassword') || {}).value || '';
+
+    // Client-side validation to avoid server 400 for short values
+    if (username.trim().length < 3) {
+        setAuthMessage('Uživatelské jméno musí mít alespoň 3 znaky.', 'error');
+        return;
+    }
+    if (password.length < 4) {
+        setAuthMessage('Heslo musí mít alespoň 4 znaky.', 'error');
+        return;
+    }
+
+    setAuthMessage('Vytvářím účet...', '');
+
+    try {
+        const data = await apiFetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        // server returns { ok: true } on success
+        if (data && data.ok) {
+            setAuthMessage('Účet vytvořen. Nyní se můžete přihlásit.', 'success');
+        } else {
+            setAuthMessage('Účet vytvořen (server odpověď neobsahovala potvrzení).', 'success');
+        }
+    } catch (err) {
+        // Show server-provided message when available, otherwise generic
+        setAuthMessage(err.message || 'Nepodařilo se vytvořit účet.', 'error');
+    }
+}
+
+async function handleLogout() {
+    try {
+        await apiFetch('/api/logout', { method: 'POST' });
+    } catch (err) {
+        console.warn('Odhlášení selhalo:', err);
+    }
+    setToken(null);
+    updateAuthUI(null);
+}
+
+function resetFilters() {
+    if (filterSearch) filterSearch.value = '';
+    if (filterSupplierIc) filterSupplierIc.value = '';
+    if (filterRecipientIc) filterRecipientIc.value = '';
+    if (filterInvoiceNumber) filterInvoiceNumber.value = '';
+    if (filterDateFrom) filterDateFrom.value = '';
+    if (filterDateTo) filterDateTo.value = '';
+    if (filterMinTotal) filterMinTotal.value = '';
+    if (filterMaxTotal) filterMaxTotal.value = '';
+    loadSavedDocuments();
 }
 
 /**
@@ -77,6 +298,7 @@ function handleFileSelect(e) {
  */
 async function handleFile(file) {
     console.log('Zpracovávám soubor:', file.name);
+    currentFileName = file.name;
 
     // Validace typu souboru
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
@@ -108,9 +330,13 @@ async function handleFile(file) {
         // Zobrazení náhledu
         await showPreview(imageToProcess);
 
+        // store original file blob for saving
+        currentFileBlob = file;
+
         // OCR zpracování
         console.log('Spouštím OCR...');
         const ocrResult = await ocrProcessor.recognizeText(imageToProcess);
+        currentOcrText = ocrResult.text || '';
 
         console.log('OCR dokončeno:', ocrResult);
 
@@ -299,6 +525,418 @@ function displayResults(results, ocrConfidence) {
     resultsSection.scrollIntoView({ behavior: 'smooth' });
 }
 
+function getFieldString(field) {
+    if (field == null) return '';
+    if (typeof field === 'object') {
+        if (field.formatted != null) return String(field.formatted);
+        if (field.value != null) return String(field.value);
+    }
+    return String(field);
+}
+
+function getFieldNumber(field) {
+    if (field == null) return null;
+    if (typeof field === 'number') return field;
+    if (typeof field === 'object') {
+        if (typeof field.value === 'number') return field.value;
+        if (field.value != null) return parseNumericAmount(field.value);
+        if (field.formatted != null) return parseNumericAmount(field.formatted);
+    }
+    return parseNumericAmount(field);
+}
+
+function parseNumericAmount(value) {
+    if (value == null) return null;
+    const s = String(value).replace(/\s/g, '').replace(/[^0-9,.-]/g, '');
+    if (!s) return null;
+    const normalized = s.replace(',', '.');
+    const num = parseFloat(normalized);
+    return Number.isNaN(num) ? null : num;
+}
+
+async function saveResultsToDb() {
+    if (!currentUser) {
+        alert('Nejprve se prosím přihlaste.');
+        return;
+    }
+    if (!currentResults) {
+        alert('Nejsou k dispozici žádné výsledky k uložení.');
+        return;
+    }
+
+    // If we have original file, convert to base64
+    let documentBase64 = null;
+    let documentMime = null;
+    if (currentFileBlob) {
+        documentMime = currentFileBlob.type || '';
+        documentBase64 = await new Promise((resolve) => {
+            const r = new FileReader();
+            r.onload = () => {
+                const dataUrl = r.result || '';
+                const parts = String(dataUrl).split(',');
+                resolve(parts.length > 1 ? parts[1] : parts[0]);
+            };
+            r.onerror = () => resolve(null);
+            r.readAsDataURL(currentFileBlob);
+        });
+    }
+
+    const payload = {
+        documentName: currentFileName || 'OCR dokument',
+        rawText: currentResults.rawText || currentOcrText || '',
+        fields: {
+            supplier_ic: getFieldString(currentResults.supplierIc || currentResults.supplierIco || currentResults.ico || ''),
+            recipient_ic: getFieldString(currentResults.recipientIc || currentResults.recipientIco || ''),
+            invoice_number: getFieldString(currentResults.invoiceNumber || ''),
+            supplier_dic: getFieldString(currentResults.supplierDic || currentResults.dic || ''),
+            recipient_dic: getFieldString(currentResults.recipientDic || ''),
+            total_amount: getFieldNumber(currentResults.totalAmount),
+            amount_without_vat: getFieldNumber(currentResults.amountWithoutVat),
+            vat_rate: getFieldNumber(currentResults.vatRate),
+            vat_amount: getFieldNumber(currentResults.vatAmount),
+            date_text: getFieldString(currentResults.date || '')
+        },
+        data: currentResults,
+        documentBase64,
+        documentMime,
+        documentFilename: currentFileBlob ? (currentFileBlob.name || currentFileName) : null
+    };
+
+    try {
+        await apiFetch('/api/documents', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        alert('✓ Výsledky byly uloženy do databáze.');
+        await loadSavedDocuments();
+    } catch (err) {
+        alert(err.message || 'Nepodařilo se uložit výsledky.');
+    }
+}
+
+function formatCurrency(value) {
+    if (value == null || value === '') return '';
+    return new Intl.NumberFormat('cs-CZ', {
+        style: 'currency',
+        currency: 'CZK',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(value);
+}
+
+function openOriginalInWindow(url) {
+    // If it's a data: URI, convert to a Blob and use an object URL (more reliable than data: in some browsers)
+    const isData = typeof url === 'string' && url.startsWith('data:');
+    if (isData) {
+        try {
+            const parts = url.split(',');
+            const meta = parts[0];
+            const isBase64 = meta.indexOf(';base64') !== -1;
+            const mime = meta.split(':')[1].split(';')[0] || 'application/octet-stream';
+            const dataPart = parts.slice(1).join(',');
+            let bytes;
+            if (isBase64) {
+                const bin = atob(dataPart);
+                const len = bin.length;
+                const arr = new Uint8Array(len);
+                for (let i = 0; i < len; i++) arr[i] = bin.charCodeAt(i);
+                bytes = arr;
+            } else {
+                const str = decodeURIComponent(dataPart);
+                const len = str.length;
+                const arr = new Uint8Array(len);
+                for (let i = 0; i < len; i++) arr[i] = str.charCodeAt(i);
+                bytes = arr;
+            }
+            const blob = new Blob([bytes], { type: mime });
+            const objUrl = URL.createObjectURL(blob);
+            // Try opening in a new tab/window without features (more compatible)
+            const newWin = window.open(objUrl, '_blank');
+            if (!newWin) {
+                // popup blocked, use anchor click fallback
+                const a = document.createElement('a');
+                a.href = objUrl;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                try { newWin.focus(); } catch (e) { /* ignore */ }
+            }
+            // Revoke object URL after a while
+            setTimeout(() => URL.revokeObjectURL(objUrl), 60 * 1000);
+            return;
+        } catch (e) {
+            console.warn('Failed to open data URI via object URL, falling back', e);
+        }
+    }
+
+    // For normal URLs, open in a new tab. Avoid complex window features to reduce popup issues.
+    try {
+        const newWin = window.open(url, '_blank');
+        if (!newWin) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } else {
+            try { newWin.focus(); } catch (e) { /* ignore */ }
+        }
+    } catch (e) {
+        try { window.open(url, '_blank'); } catch (err) { console.error('Unable to open window', err); }
+    }
+}
+
+function collectFilters() {
+    return {
+        search: filterSearch ? filterSearch.value.trim() : '',
+        supplier_ic: filterSupplierIc ? filterSupplierIc.value.trim() : '',
+        recipient_ic: filterRecipientIc ? filterRecipientIc.value.trim() : '',
+        invoice_number: filterInvoiceNumber ? filterInvoiceNumber.value.trim() : '',
+        date_from: filterDateFrom ? filterDateFrom.value : '',
+        date_to: filterDateTo ? filterDateTo.value : '',
+        min_total: filterMinTotal ? filterMinTotal.value : '',
+        max_total: filterMaxTotal ? filterMaxTotal.value : ''
+    };
+}
+
+async function loadSavedDocuments() {
+    if (!currentUser) return;
+
+    const filters = collectFilters();
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+    });
+
+    try {
+        const data = await apiFetch(`/api/documents?${params.toString()}`);
+        renderSavedDocuments(data.items || []);
+    } catch (err) {
+        console.error('Nepodařilo se načíst uložené dokumenty:', err);
+    }
+}
+
+function renderSavedDocuments(items) {
+    if (!savedTableBody || !savedEmpty) return;
+    savedTableBody.innerHTML = '';
+    if (savedDetail) savedDetail.style.display = 'none';
+
+    if (!items.length) {
+        savedEmpty.style.display = 'block';
+        return;
+    }
+
+    savedEmpty.style.display = 'none';
+    items.forEach((item) => {
+        const tr = document.createElement('tr');
+        const totalText = item.total_amount != null ? formatCurrency(item.total_amount) : '';
+        tr.innerHTML = `
+            <td>${item.date_text || ''}</td>
+            <td>${item.invoice_number || ''}</td>
+            <td>${item.supplier_ic || ''}</td>
+            <td>${item.recipient_ic || ''}</td>
+            <td>${totalText}</td>
+            <td>
+                <button class="btn-secondary btn-small" data-action="view" data-id="${item.id}">Zobrazit</button>
+                <button class="btn-primary btn-small" data-action="edit" data-id="${item.id}">Upravit</button>
+                <button class="btn-secondary btn-small" data-action="delete" data-id="${item.id}">Smazat</button>
+            </td>
+        `;
+        tr.querySelectorAll('button').forEach(btn => {
+            const id = btn.getAttribute('data-id');
+            const action = btn.getAttribute('data-action');
+            if (action === 'view') btn.addEventListener('click', () => loadDocumentDetail(id, false));
+            if (action === 'edit') btn.addEventListener('click', () => loadDocumentDetail(id, true));
+            if (action === 'delete') btn.addEventListener('click', () => deleteDocument(id));
+        });
+        savedTableBody.appendChild(tr);
+    });
+}
+
+async function loadDocumentDetail(id, editMode = false) {
+    if (!id) return;
+    try {
+        const data = await apiFetch(`/api/documents/${id}`);
+        const doc = data.document;
+        if (!doc) return;
+        if (savedDetailGrid) {
+            savedDetailGrid.innerHTML = '';
+
+            // If editMode, render inputs, otherwise show read-only blocks
+            const makeRow = (label, key, value, opts = {}) => {
+                const div = document.createElement('div');
+                div.className = 'saved-detail-item';
+                if (editMode) {
+                    const input = document.createElement(opts.type === 'textarea' ? 'textarea' : 'input');
+                    input.value = value == null ? '' : String(value);
+                    input.id = `edit_${key}`;
+                    if (opts.type === 'number') input.type = 'number';
+                    input.style.width = '100%';
+                    div.innerHTML = `<strong>${label}</strong>`;
+                    div.appendChild(input);
+                } else {
+                    div.innerHTML = `<strong>${label}</strong><div>${value == null ? '' : value}</div>`;
+                }
+                return div;
+            };
+
+            savedDetailGrid.appendChild(makeRow('Název dokumentu', 'document_name', doc.document_name || ''));
+            savedDetailGrid.appendChild(makeRow('Datum', 'date_text', doc.date_text || ''));
+            savedDetailGrid.appendChild(makeRow('Číslo faktury', 'invoice_number', doc.invoice_number || ''));
+            savedDetailGrid.appendChild(makeRow('IČ dodavatele', 'supplier_ic', doc.supplier_ic || ''));
+            savedDetailGrid.appendChild(makeRow('IČ odběratele', 'recipient_ic', doc.recipient_ic || ''));
+            savedDetailGrid.appendChild(makeRow('DIČ dodavatele', 'supplier_dic', doc.supplier_dic || ''));
+            savedDetailGrid.appendChild(makeRow('DIČ odběratele', 'recipient_dic', doc.recipient_dic || ''));
+            savedDetailGrid.appendChild(makeRow('Celkem', 'total_amount', doc.total_amount != null ? formatCurrency(doc.total_amount) : '', { type: 'number' }));
+            savedDetailGrid.appendChild(makeRow('Bez DPH', 'amount_without_vat', doc.amount_without_vat != null ? formatCurrency(doc.amount_without_vat) : '', { type: 'number' }));
+            savedDetailGrid.appendChild(makeRow('DPH sazba', 'vat_rate', doc.vat_rate != null ? `${doc.vat_rate}` : '', { type: 'number' }));
+            savedDetailGrid.appendChild(makeRow('DPH částka', 'vat_amount', doc.vat_amount != null ? formatCurrency(doc.vat_amount) : '', { type: 'number' }));
+
+            // file / preview
+            if (doc.document_base64) {
+                const mime = doc.document_mime || '';
+                const imgDiv = document.createElement('div');
+                imgDiv.className = 'saved-detail-item';
+                imgDiv.innerHTML = `<strong>Originál</strong>`;
+                if (mime.startsWith('image/')) {
+                    const img = document.createElement('img');
+                    img.style.maxWidth = '100%';
+                    img.style.cursor = 'pointer';
+                    const url = `data:${mime};base64,${doc.document_base64}`;
+                    img.src = url;
+                    img.addEventListener('click', () => openOriginalInWindow(url));
+                    img.setAttribute('alt', doc.document_filename || 'Originál');
+                    imgDiv.appendChild(img);
+                } else if (mime === 'application/pdf') {
+                    // Wrap iframe in a relative container and put a transparent overlay to capture clicks
+                    const wrapper = document.createElement('div');
+                    wrapper.style.position = 'relative';
+                    const iframe = document.createElement('iframe');
+                    iframe.style.width = '100%';
+                    iframe.style.height = '600px';
+                    // show embedded PDF when base64 present, otherwise use authenticated endpoint
+                    const pdfUrl = doc.document_base64 ? `data:${mime};base64,${doc.document_base64}` : (getToken() ? `/api/documents/${id}/file?token=${encodeURIComponent(getToken())}` : `/api/documents/${id}/file`);
+                    iframe.src = pdfUrl;
+                    wrapper.appendChild(iframe);
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'absolute';
+                    overlay.style.left = '0';
+                    overlay.style.top = '0';
+                    overlay.style.width = '100%';
+                    overlay.style.height = '100%';
+                    overlay.style.cursor = 'pointer';
+                    overlay.title = 'Otevřít originál v novém okně';
+                    overlay.addEventListener('click', () => openOriginalInWindow(pdfUrl));
+                    wrapper.appendChild(overlay);
+                    imgDiv.appendChild(wrapper);
+                } else {
+                    const token = getToken();
+                    const fileUrl = token ? `/api/documents/${id}/file?token=${encodeURIComponent(token)}` : `/api/documents/${id}/file`;
+                    const a = document.createElement('a');
+                    a.href = fileUrl;
+                    a.textContent = doc.document_filename || 'Stáhnout soubor';
+                    a.target = '_blank';
+                    a.rel = 'noopener';
+                    imgDiv.appendChild(a);
+                }
+                savedDetailGrid.appendChild(imgDiv);
+            }
+
+            // raw text
+            if (savedDetailRaw) savedDetailRaw.textContent = doc.raw_text || '';
+
+            // actions
+            const actionsDiv = document.createElement('div');
+            actionsDiv.style.marginTop = '12px';
+            if (editMode) {
+                const saveBtn = document.createElement('button');
+                saveBtn.className = 'btn-primary';
+                saveBtn.textContent = 'Uložit změny';
+                saveBtn.addEventListener('click', () => updateDocument(id));
+                actionsDiv.appendChild(saveBtn);
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn-secondary';
+                delBtn.textContent = 'Smazat záznam';
+                delBtn.style.marginLeft = '8px';
+                delBtn.addEventListener('click', () => { if (confirm('Opravdu smazat tento záznam?')) deleteDocument(id); });
+                actionsDiv.appendChild(delBtn);
+            } else {
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn-primary';
+                editBtn.textContent = 'Upravit';
+                editBtn.addEventListener('click', () => loadDocumentDetail(id, true));
+                actionsDiv.appendChild(editBtn);
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn-secondary';
+                delBtn.textContent = 'Smazat';
+                delBtn.style.marginLeft = '8px';
+                delBtn.addEventListener('click', () => { if (confirm('Opravdu smazat tento záznam?')) deleteDocument(id); });
+                actionsDiv.appendChild(delBtn);
+            }
+
+            savedDetailGrid.appendChild(actionsDiv);
+        }
+        if (savedDetail) savedDetail.style.display = 'block';
+    } catch (err) {
+        console.error('Nepodařilo se načíst detail:', err);
+    }
+}
+
+async function deleteDocument(id) {
+    try {
+        await apiFetch(`/api/documents/${id}`, { method: 'DELETE' });
+        alert('Záznam odstraněn');
+        await loadSavedDocuments();
+    } catch (err) {
+        alert(err.message || 'Nepodařilo se smazat záznam');
+    }
+}
+
+async function updateDocument(id) {
+    try {
+        const payloadFields = {};
+        ['document_name','date_text','invoice_number','supplier_ic','recipient_ic','supplier_dic','recipient_dic','total_amount','amount_without_vat','vat_rate','vat_amount','raw_text'].forEach(k => {
+            const el = document.getElementById(`edit_${k}`);
+            if (el) payloadFields[k] = el.value;
+        });
+
+        // Try POST first (server supports POST for updates), but some servers
+        // may expect PUT. If server returns Not Found, retry with PUT.
+        try {
+            await apiFetch(`/api/documents/${id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fields: payloadFields })
+            });
+        } catch (err) {
+            const msg = (err && err.message) ? String(err.message).toLowerCase() : '';
+            if (msg.includes('not found')) {
+                // Retry with PUT as a fallback
+                await apiFetch(`/api/documents/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fields: payloadFields })
+                });
+            } else {
+                throw err;
+            }
+        }
+        alert('Uloženo');
+        await loadSavedDocuments();
+        await loadDocumentDetail(id, false);
+    } catch (err) {
+        alert(err.message || 'Nepodařilo se uložit změny');
+    }
+}
+
 /**
  * Zobrazení jednotlivého výsledku
  */
@@ -403,6 +1041,8 @@ Vygenerováno: ${new Date().toLocaleString('cs-CZ')}
 function resetForm() {
     fileInput.value = '';
     currentResults = null;
+    currentFileName = '';
+    currentOcrText = '';
     hideAllSections();
     
     // Scroll nahoru
@@ -462,6 +1102,8 @@ Datum vystavení: 15.01.2024
 
     const parsedResults = invoiceParser.parse(demoText);
     currentResults = invoiceParser.calculateMissingValues(parsedResults);
+    currentFileName = 'demo.txt';
+    currentOcrText = demoText;
     displayResults(currentResults, 100);
     resultsSection.style.display = 'block';
 }

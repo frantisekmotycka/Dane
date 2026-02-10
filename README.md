@@ -15,6 +15,16 @@ Jednoduchá webová aplikace pro automatické čtení faktur a účtenek pomocí
 
 ## 🚀 Spuštění
 
+### Varianta 0: Ukládání do databáze (doporučeno pro nový modul)
+
+Pro přihlášení uživatelů a ukládání výsledků do SQLite je potřeba spustit lokální server:
+
+```bash
+python server.py
+```
+
+Poté otevřete: `http://localhost:8000`
+
 ### Varianta 1: Otevření v prohlížeči (NEJJEDNODUŠŠÍ)
 
 1. **Rozbalte složku `invoice-ocr-web`**

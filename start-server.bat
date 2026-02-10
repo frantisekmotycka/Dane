@@ -25,7 +25,9 @@ if %errorlevel% neq 0 (
 )
 
 REM Spusteni serveru
-echo Spoustim Python HTTP server...
-python -m http.server 8000
+echo Spoustim aplikacni server...
+pushd %~dp0
+python server.py
+popd
 
 pause
