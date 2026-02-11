@@ -40,6 +40,9 @@ const profileLink = document.getElementById('profileLink');
 const savedSection = document.getElementById('savedSection');
 const savedTableBody = document.getElementById('savedTableBody');
 const savedEmpty = document.getElementById('savedEmpty');
+const navLoad = document.getElementById('navLoad');
+const navSaved = document.getElementById('navSaved');
+const navExport = document.getElementById('navExport');
 const filterApplyBtn = document.getElementById('filterApplyBtn');
 const filterResetBtn = document.getElementById('filterResetBtn');
 const filterSearch = document.getElementById('filterSearch');
@@ -149,6 +152,21 @@ function setupEventListeners() {
             headerDropdown.style.display = open ? 'none' : 'block';
             headerUserBtn.setAttribute('aria-expanded', String(!open));
         });
+    }
+    if (navLoad) {
+        navLoad.addEventListener('click', (e) => {
+            e.preventDefault();
+            showOnlyUpload();
+        });
+    }
+    if (navSaved) {
+        navSaved.addEventListener('click', (e) => {
+            e.preventDefault();
+            showOnlySaved();
+        });
+    }
+    if (navExport) {
+        navExport.addEventListener('click', (e) => { e.preventDefault(); showOnlyExport(); });
     }
     if (headerDropdownLogout) {
         headerDropdownLogout.addEventListener('click', (e) => { e.preventDefault(); if (headerDropdown) headerDropdown.style.display = 'none'; handleLogout(); });
@@ -792,6 +810,67 @@ async function loadSavedDocuments() {
     } catch (err) {
         console.error('Nepodařilo se načíst uložené dokumenty:', err);
     }
+}
+
+async function exportData() {
+    if (!currentUser) {
+        alert('Pro export dat se prosím přihlaste.');
+        return;
+    }
+    try {
+        const list = await apiFetch('/api/documents');
+        const items = list.items || [];
+        const docs = [];
+        for (const it of items) {
+            try {
+                const d = await apiFetch(`/api/documents/${it.id}`);
+                if (d && d.document) docs.push(d.document);
+            } catch (e) {
+                console.warn('Nepodařilo se stáhnout detail dokumentu', it.id, e);
+            }
+        }
+        const blob = new Blob([JSON.stringify(docs, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const now = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+        a.download = `export_faktury_${now}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) {
+        alert(err.message || 'Chyba při exportu dat');
+    }
+}
+
+function hideAllMainSections() {
+    const upload = document.querySelector('.upload-section'); if (upload) upload.style.display = 'none';
+    const preview = document.getElementById('previewSection'); if (preview) preview.style.display = 'none';
+    const results = document.getElementById('resultsSection'); if (results) results.style.display = 'none';
+    const saved = document.getElementById('savedSection'); if (saved) saved.style.display = 'none';
+    const exportS = document.getElementById('exportSection'); if (exportS) exportS.style.display = 'none';
+    if (savedDetail) savedDetail.style.display = 'none';
+}
+
+function showOnlyUpload() {
+    hideAllMainSections();
+    const upload = document.querySelector('.upload-section'); if (upload) upload.style.display = 'block';
+    // hide preview/results until file processed
+    const preview = document.getElementById('previewSection'); if (preview) preview.style.display = 'none';
+    const results = document.getElementById('resultsSection'); if (results) results.style.display = 'none';
+}
+
+function showOnlySaved() {
+    hideAllMainSections();
+    if (!currentUser) { alert('Pro zobrazení uložených faktur se prosím přihlaste.'); return; }
+    const saved = document.getElementById('savedSection'); if (saved) { saved.style.display = 'block'; saved.scrollIntoView({ behavior: 'smooth' }); }
+    loadSavedDocuments();
+}
+
+function showOnlyExport() {
+    hideAllMainSections();
+    const exportS = document.getElementById('exportSection'); if (exportS) { exportS.style.display = 'block'; exportS.scrollIntoView({ behavior: 'smooth' }); }
 }
 
 function renderSavedDocuments(items) {
