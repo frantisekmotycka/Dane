@@ -798,6 +798,41 @@ footer p {
 .cell-low { background: rgba(239,68,68,0.06); border-left: 4px solid var(--error-color); }
 .cell-missing { background: rgba(239,68,68,0.04); border-left: 4px dashed rgba(239,68,68,0.6); }
 
+/* Button-style chooser (custom select) */
+.button-group {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+.btn-option {
+    padding: 18px 36px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+    color: rgba(255,255,255,0.95);
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.06);
+    font-weight: 600;
+    min-width: 140px;
+    text-align: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.btn-option:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+.btn-option.selected {
+    border-color: rgba(255,255,255,0.95);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
+}
+.export-controls .form-row label { color: #e6eefc; }
+.export-controls { background: linear-gradient(90deg,#164e8c,#1f6fb8); padding:16px; border-radius:12px; }
+.export-controls .form-row { margin-bottom:12px; }
+
+/* Hide original select when using button group */
+.hidden-select { display: none !important; }
+
 .value-cell[contenteditable="true"]:focus {
     outline: 2px solid rgba(37,99,235,0.12);
     background: #fff;

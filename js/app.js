@@ -65,6 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Aplikace inicializována');
     setupEventListeners();
     initAuth();
+    // Initialize export UI controls (if present)
+    try { initExportUI(); } catch (e) { console.warn('initExportUI not available yet', e); }
 });
 
 /**
@@ -870,7 +872,470 @@ function showOnlySaved() {
 
 function showOnlyExport() {
     hideAllMainSections();
-    const exportS = document.getElementById('exportSection'); if (exportS) { exportS.style.display = 'block'; exportS.scrollIntoView({ behavior: 'smooth' }); }
+    const exportS = document.getElementById('exportSection');
+    if (exportS) {
+        // each time export section is opened, refresh available years
+        const yearSel = exportS.querySelector('#exportYear');
+        const periodSel = exportS.querySelector('#exportPeriod');
+        if (yearSel) {
+            const pre = exportS.querySelector('#exportPrehled');
+            populateExportYears(yearSel).then(() => {
+                // after years are loaded, refresh period options for selected year
+                const y = yearSel.value || (new Date()).getFullYear();
+                const type = pre ? pre.value : 'all';
+                if (periodSel) fillPeriodOptions(periodSel, Number(y), type === 'monthly' ? 'monthly' : (type === 'quarterly' ? 'quarterly' : 'all'));
+            }).catch(err => console.warn('populateExportYears failed', err));
+        }
+        exportS.style.display = 'block';
+        exportS.scrollIntoView({ behavior: 'smooth' });
+    }
+}
+
+/** EXPORT HELPERS **/
+function isoFromDateText(text) {
+    if (!text) return null;
+    const s = String(text).trim();
+    // dd.mm.yyyy
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    // yyyy-mm-dd
+    const m2 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m2) return `${m2[1]}-${m2[2].padStart(2,'0')}-${m2[3].padStart(2,'0')}`;
+    const d = new Date(s);
+    if (!isNaN(d)) return d.toISOString().slice(0,10);
+    return null;
+}
+
+function computeRange(value) {
+    // value formats: 'year:2024', 'month:2024:1', 'quarter:2024:1' (quarter 1..4)
+    if (!value) return null;
+    const parts = String(value).split(':');
+    const type = parts[0];
+    const year = Number(parts[1]) || (new Date()).getFullYear();
+    if (type === 'year') {
+        return { from: `${year}-01-01`, to: `${year}-12-31` };
+    }
+    if (type === 'month') {
+        const month = Number(parts[2]) || 1;
+        const mm = String(month).padStart(2,'0');
+        const from = `${year}-${mm}-01`;
+        const last = new Date(year, month, 0).getDate();
+        const to = `${year}-${mm}-${String(last).padStart(2,'0')}`;
+        return { from, to };
+    }
+    if (type === 'quarter') {
+        const q = Number(parts[2]) || 1;
+        const startMonth = (q - 1) * 3 + 1;
+        const endMonth = startMonth + 2;
+        const from = `${year}-${String(startMonth).padStart(2,'0')}-01`;
+        const last = new Date(year, endMonth, 0).getDate();
+        const to = `${year}-${String(endMonth).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+        return { from, to };
+    }
+    return null;
+}
+
+function fillPeriodOptions(selectEl, year, type = 'all') {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    // Only include the "whole year" option when type is 'all'
+    if (type === 'all') {
+        const optYear = document.createElement('option'); optYear.value = `year:${year}`; optYear.textContent = `Celý rok ${year}`; selectEl.appendChild(optYear);
+    }
+    if (type === 'all' || type === 'quarterly') {
+        // Quarters: values 1..4, label '1'..'4'
+        for (let q = 1; q <= 4; q++) {
+            const o = document.createElement('option'); o.value = String(q); o.textContent = String(q); selectEl.appendChild(o);
+        }
+    }
+    if (type === 'all' || type === 'monthly') {
+        // Months: values 1..12
+        for (let m = 1; m <= 12; m++) {
+            const o = document.createElement('option'); o.value = String(m); o.textContent = String(m); selectEl.appendChild(o);
+        }
+    }
+    // If there is a button-group associated with this select, re-render it
+    try {
+        const btnContainer = document.getElementById(selectEl.id + 'Buttons');
+        if (btnContainer) renderButtonGroupForSelect(selectEl, btnContainer);
+    } catch (e) { /* ignore */ }
+}
+
+// Render a button-group that mirrors a select's options and keeps it in sync
+function renderButtonGroupForSelect(selectEl, containerEl) {
+    if (!selectEl || !containerEl) return;
+    containerEl.innerHTML = '';
+    const options = Array.from(selectEl.options || []);
+    options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-option';
+        btn.textContent = opt.textContent || opt.value;
+        btn.dataset.value = opt.value;
+        if (opt.disabled) btn.disabled = true;
+        if (selectEl.value === opt.value) btn.classList.add('selected');
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // update select value and trigger change
+            selectEl.value = opt.value;
+            // update selected class for buttons
+            Array.from(containerEl.querySelectorAll('.btn-option')).forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            const ev = new Event('change', { bubbles: true });
+            selectEl.dispatchEvent(ev);
+        });
+        containerEl.appendChild(btn);
+    });
+    // listen for programmatic changes on the select (ensure single handler)
+    try {
+        if (selectEl._btnGroupHandler) selectEl.removeEventListener('change', selectEl._btnGroupHandler);
+    } catch (e) {}
+    const _handler = () => {
+        const val = selectEl.value;
+        Array.from(containerEl.querySelectorAll('.btn-option')).forEach(b => b.classList.toggle('selected', b.dataset.value === val));
+    };
+    selectEl._btnGroupHandler = _handler;
+    selectEl.addEventListener('change', _handler);
+}
+
+async function populateExportYears(selectEl) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    const currentYear = new Date().getFullYear();
+    // First try to get documents from API (uses apiFetch to include auth token if present)
+    try {
+        const data = await apiFetch('/api/documents?per_page=1000');
+        const items = Array.isArray(data) ? data : (data.items || []);
+        const years = new Set();
+        items.forEach(d => {
+            if (!d) return;
+            if (d.date_iso) {
+                const y = String(d.date_iso).slice(0,4);
+                if (y) years.add(y);
+                return;
+            }
+            if (d.date_text) {
+                const iso = isoFromDateText(d.date_text);
+                if (iso) years.add(iso.slice(0,4));
+            }
+        });
+        if (years.size) {
+            Array.from(years).sort((a,b) => b - a).forEach(y => {
+                const o = document.createElement('option'); o.value = String(y); o.textContent = String(y); selectEl.appendChild(o);
+            });
+            // render custom buttons if present
+            try { const btn = document.getElementById(selectEl.id + 'Buttons'); if (btn) renderButtonGroupForSelect(selectEl, btn); } catch(e){}
+            return;
+        }
+    } catch (e) {
+        // API may be unavailable or unauthorized; fallback below
+        console.warn('populateExportYears: api documents fetch failed, falling back', e);
+    }
+
+    // Fallback: try to read directory indices for /testFaktury/ and /uploads/
+    try {
+        const tried = ['/testFaktury/', '/uploads/'];
+        const years = new Set();
+        for (const p of tried) {
+            try {
+                const resp = await fetch(p);
+                if (!resp.ok) continue;
+                const txt = await resp.text();
+                const matches = txt.match(/(20\d{2})/g) || [];
+                matches.forEach(y => years.add(y));
+                // also try filenames like fYYYYMM
+                const fmatch = txt.match(/f(\d{6})/g) || [];
+                fmatch.forEach(f => {
+                    const m = f.match(/f(\d{4})(\d{2})/);
+                    if (m) years.add(m[1]);
+                });
+            } catch (e) {
+                // ignore
+            }
+        }
+        if (years.size) {
+            Array.from(years).sort((a,b) => b - a).forEach(y => {
+                const o = document.createElement('option'); o.value = String(y); o.textContent = String(y); selectEl.appendChild(o);
+            });
+            try { const btn = document.getElementById(selectEl.id + 'Buttons'); if (btn) renderButtonGroupForSelect(selectEl, btn); } catch(e){}
+            return;
+        }
+    } catch (e) {
+        console.warn('populateExportYears fallback error', e);
+    }
+
+    // Final fallback: recent 3 years
+    for (let i = 0; i < 3; i++) {
+        const y = String(currentYear - i);
+        const o = document.createElement('option'); o.value = y; o.textContent = y; selectEl.appendChild(o);
+    }
+    try { const btn = document.getElementById(selectEl.id + 'Buttons'); if (btn) renderButtonGroupForSelect(selectEl, btn); } catch(e){}
+}
+
+async function fetchExportedDocs(range) {
+    // range: { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
+    if (!range) return [];
+    try {
+        const params = new URLSearchParams({ date_from: range.from, date_to: range.to });
+        const data = await apiFetch(`/api/documents?${params.toString()}`);
+        return data.items || [];
+    } catch (e) {
+        console.warn('Primary export fetch failed, fallback not implemented fully', e);
+        return [];
+    }
+}
+
+function renderExportTable(container, items) {
+    if (!container) return;
+    container.innerHTML = '';
+    const table = document.getElementById('exportTable');
+    const emptyEl = document.getElementById('exportEmpty');
+    const summaryRow = document.getElementById('exportSummaryRow');
+    const totalEl = document.getElementById('exportTotalSum');
+
+    if (!items || !items.length) {
+        // hide table, show empty message
+        if (table) table.style.display = 'none';
+        if (summaryRow) summaryRow.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = '';
+        return;
+    }
+    // show table and hide empty placeholder
+    if (table) table.style.display = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+    // helper: try several candidate property names and return numeric value or null
+    function getNumericField(obj, candidates) {
+        if (!obj) return null;
+        // helper to parse numbers from various formats using existing parser
+        function parseAny(v) {
+            if (v == null) return null;
+            if (typeof v === 'number') return v;
+            if (typeof v === 'string') {
+                const p = parseNumericAmount(v);
+                return p != null ? p : null;
+            }
+            if (typeof v === 'object') {
+                if (v.value != null) return parseAny(v.value);
+                if (v.formatted != null) return parseAny(v.formatted);
+            }
+            return null;
+        }
+
+        // 1) top-level candidates
+        for (const k of candidates) {
+            if (obj[k] != null) {
+                const n = parseAny(obj[k]);
+                if (n != null) return n;
+            }
+        }
+
+        // 2) recursive search for candidate keys anywhere in the object (depth-limited)
+        const visited = new WeakSet();
+        function deepSearch(o, depth) {
+            if (!o || typeof o !== 'object' || visited.has(o) || depth <= 0) return null;
+            visited.add(o);
+            for (const k of Object.keys(o)) {
+                try {
+                    if (candidates.includes(k) && o[k] != null) {
+                        const n = parseAny(o[k]);
+                        if (n != null) return n;
+                    }
+                } catch (e) { /* ignore */ }
+            }
+            // descend into child objects/arrays
+            for (const k of Object.keys(o)) {
+                try {
+                    const child = o[k];
+                    if (child && typeof child === 'object') {
+                        const found = deepSearch(child, depth - 1);
+                        if (found != null) return found;
+                    }
+                } catch (e) { /* ignore */ }
+            }
+            return null;
+        }
+
+        return deepSearch(obj, 4);
+    }
+
+    // accumulate sums
+    let sumTotal = 0, sumNet = 0, sumVat = 0;
+
+    items.forEach(it => {
+        const tr = document.createElement('tr');
+        const date = it.date_text || it.date || it.date_iso || '';
+        const invoice = it.invoice_number || it.number || it.invoice || '';
+        const supplier = it.supplier_ic || it.supplier || it.supplierIco || '';
+        const recipient = it.recipient_ic || it.recipient || it.buyer_ic || it.buyer || '';
+        // amounts: try multiple field names
+        const rawTotal = getNumericField(it, ['total_amount','totalAmount','total','celkem','sum','amount_total']);
+        const rawNoVat = getNumericField(it, ['amount_without_vat','amountWithoutVat','price_without_vat','net_amount','no_vat','bez_dph','bezDPH','netto','price_net']);
+        const rawVat = getNumericField(it, ['vat_amount','vatAmount','vat','dph_amount','dphAmount','dph','tax_amount','vat_total']);
+        // derive missing values
+        let totalVal = (!Number.isNaN(rawTotal) && rawTotal != null) ? rawTotal : null;
+        let noVatVal = (!Number.isNaN(rawNoVat) && rawNoVat != null) ? rawNoVat : null;
+        let vatVal = (!Number.isNaN(rawVat) && rawVat != null) ? rawVat : null;
+        if (totalVal == null && noVatVal != null && vatVal != null) totalVal = noVatVal + vatVal;
+        if (vatVal == null && totalVal != null && noVatVal != null) vatVal = totalVal - noVatVal;
+        if (noVatVal == null && totalVal != null && vatVal != null) noVatVal = totalVal - vatVal;
+
+        const total = totalVal != null ? formatMoney(totalVal) : '';
+        const noVat = noVatVal != null ? formatMoney(noVatVal) : '';
+        const vat = vatVal != null ? formatMoney(vatVal) : '';
+        const hasFile = it.document ? true : false;
+        tr.innerHTML = `
+            <td>${date}</td>
+            <td>${invoice}</td>
+            <td>${supplier}</td>
+            <td>${recipient}</td>
+            <td>${noVat}</td>
+            <td>${vat}</td>
+            <td>${total}</td>
+        `;
+        if (hasFile) {
+            const btn = tr.querySelector('.btn-export-download');
+            if (btn) btn.addEventListener('click', () => {
+                // open file
+                if (it.document && it.document.document_base64 && it.document.document_mime) {
+                    const url = `data:${it.document.document_mime};base64,${it.document.document_base64}`;
+                    openOriginalInWindow(url);
+                } else {
+                    const token = getToken();
+                    const url = token ? `/api/documents/${it.id}/file?token=${encodeURIComponent(token)}` : `/api/documents/${it.id}/file`;
+                    openOriginalInWindow(url);
+                }
+            });
+        }
+        container.appendChild(tr);
+
+        // accumulate sums
+        if (totalVal != null && !Number.isNaN(totalVal)) sumTotal += totalVal;
+        if (noVatVal != null && !Number.isNaN(noVatVal)) sumNet += noVatVal;
+        if (vatVal != null && !Number.isNaN(vatVal)) sumVat += vatVal;
+    });
+    // compute summary totals and show in footer
+    try {
+        if (totalEl) totalEl.textContent = formatMoney(sumTotal);
+        const netEl = document.getElementById('exportNetSum');
+        const vatEl = document.getElementById('exportVatSum');
+        if (netEl) netEl.textContent = formatMoney(sumNet);
+        if (vatEl) vatEl.textContent = formatMoney(sumVat);
+        if (summaryRow) summaryRow.style.display = '';
+    } catch (e) {
+        if (summaryRow) summaryRow.style.display = 'none';
+    }
+}
+
+function formatMoney(value) {
+    if (value == null || value === '') return '';
+    return new Intl.NumberFormat('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value)) + ' Kč';
+}
+
+function downloadCurrentExport(items) {
+    if (!items || !items.length) return;
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const now = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.download = `export_faktury_${now}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function initExportUI() {
+    const exportSection = document.getElementById('exportSection');
+    if (!exportSection) return;
+    const yearSelect = exportSection.querySelector('#exportYear') || exportSection.querySelector('.export-year');
+    const preSelect = exportSection.querySelector('#exportPrehled');
+    const periodSelect = exportSection.querySelector('#exportPeriod') || exportSection.querySelector('.export-period');
+    const fetchBtn = exportSection.querySelector('#exportApplyBtn') || exportSection.querySelector('.export-fetch');
+    const downloadBtn = exportSection.querySelector('#exportDownloadBtn') || exportSection.querySelector('.export-download');
+    const tableBody = exportSection.querySelector('#exportTableBody') || exportSection.querySelector('.export-table-body');
+
+    // Render button-groups for selects (if containers exist)
+    try {
+        const preBtns = document.getElementById('exportPrehledButtons');
+        if (preBtns && preSelect) renderButtonGroupForSelect(preSelect, preBtns);
+        const yearBtns = document.getElementById('exportYearButtons');
+        if (yearBtns && yearSelect) renderButtonGroupForSelect(yearSelect, yearBtns);
+        const periodBtns = document.getElementById('exportPeriodButtons');
+        if (periodBtns && periodSelect) renderButtonGroupForSelect(periodSelect, periodBtns);
+    } catch (e) { /* ignore */ }
+
+    // Populate years and periods
+    if (yearSelect) populateExportYears(yearSelect).then(() => {
+        const y = yearSelect.value || (new Date()).getFullYear();
+        const type = preSelect ? preSelect.value : 'all';
+        const row = exportSection.querySelector('#exportPeriodRow');
+        if (type === 'monthly' || type === 'quarterly') {
+            if (row) row.style.display = '';
+        } else {
+            if (row) row.style.display = 'none';
+        }
+        const labelEl = exportSection.querySelector('#exportPeriodLabel');
+        if (type === 'monthly') {
+            if (labelEl) labelEl.textContent = 'Měsíc';
+        } else if (type === 'quarterly') {
+            if (labelEl) labelEl.textContent = 'Čtvrtletí';
+        } else {
+            if (labelEl) labelEl.textContent = 'Měsíc / Čtvrtletí';
+        }
+        if (periodSelect) fillPeriodOptions(periodSelect, Number(y), type === 'monthly' ? 'monthly' : (type === 'quarterly' ? 'quarterly' : 'all'));
+    });
+
+    if (yearSelect) yearSelect.addEventListener('change', () => {
+        const y = Number(yearSelect.value) || (new Date()).getFullYear();
+        const type = preSelect ? preSelect.value : 'all';
+        if (periodSelect) fillPeriodOptions(periodSelect, y, type === 'monthly' ? 'monthly' : (type === 'quarterly' ? 'quarterly' : 'all'));
+    });
+
+    // when user changes overview type, show/hide and populate period select accordingly
+    if (preSelect) preSelect.addEventListener('change', () => {
+        const type = preSelect.value;
+        const y = Number(yearSelect ? yearSelect.value : (new Date()).getFullYear()) || (new Date()).getFullYear();
+        const row = exportSection.querySelector('#exportPeriodRow');
+        const labelEl = exportSection.querySelector('#exportPeriodLabel');
+        if (type === 'monthly' || type === 'quarterly') {
+            if (row) row.style.display = '';
+            if (periodSelect) fillPeriodOptions(periodSelect, y, type === 'monthly' ? 'monthly' : 'quarterly');
+            if (type === 'monthly') { if (labelEl) labelEl.textContent = 'Měsíc'; }
+            else { if (labelEl) labelEl.textContent = 'Čtvrtletí'; }
+        } else {
+            if (row) row.style.display = 'none';
+            if (periodSelect) fillPeriodOptions(periodSelect, y, 'all');
+            if (labelEl) labelEl.textContent = 'Měsíc / Čtvrtletí';
+        }
+    });
+
+    let lastFetched = [];
+    if (fetchBtn) fetchBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const type = preSelect ? preSelect.value : 'yearly';
+        const year = yearSelect ? String(yearSelect.value) : String((new Date()).getFullYear());
+        let val = null;
+        if (type === 'monthly') {
+            if (!periodSelect || !periodSelect.value) return alert('Vyberte měsíc');
+            val = `month:${year}:${periodSelect.value}`;
+        } else if (type === 'quarterly') {
+            if (!periodSelect || !periodSelect.value) return alert('Vyberte čtvrtletí');
+            val = `quarter:${year}:${periodSelect.value}`;
+        } else {
+            val = `year:${year}`;
+        }
+        const range = computeRange(val);
+        if (!range) return alert('Neplatné období');
+        const items = await fetchExportedDocs(range);
+        lastFetched = items;
+        renderExportTable(tableBody, items);
+    });
+
+    if (downloadBtn) downloadBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        downloadCurrentExport(lastFetched);
+    });
 }
 
 function renderSavedDocuments(items) {

@@ -16,7 +16,7 @@
         <header>
             <div class="header-center">
                 <h1>📄 OCR Čtečka Faktur</h1>
-                <p>Nahrajte obrázek faktury nebo účtenky a automaticky se načtou údaje</p>
+                <p>Nahrajte 1obrázek faktury nebo účtenky a automaticky se načtou údaje</p>
             </div>
             <div class="header-right">
                 <div class="header-auth">
@@ -262,11 +262,65 @@
                 </div>
             </section>
 
-            <!-- Export / generated data section (empty placeholder) -->
+            <!-- Export / generated data section -->
             <section class="export-section" id="exportSection" style="display: none; padding: 30px;">
                 <h2>📦 Vygenerovaná data</h2>
-                <p>Prozatím zde nejsou žádná data. Použijte tlačítko "Vygeneruj data" v menu.</p>
-                <div id="exportContent"></div>
+                <p>Vyberte přehled a období pro zobrazení faktur. Můžete je také stáhnout jako JSON.</p>
+                <div id="exportContent">
+                    <div class="export-controls">
+                        <div class="form-row">
+                            <label for="exportPrehled">Přehled</label>
+                            <select id="exportPrehled" class="hidden-select">
+                                <option value="monthly">Měsíční</option>
+                                <option value="quarterly">Čtvrtletní</option>
+                                <option value="yearly">Roční</option>
+                            </select>
+                            <div class="button-group" id="exportPrehledButtons" data-target="exportPrehled"></div>
+                        </div>
+                        <div class="form-row">
+                            <label for="exportYear">Rok</label>
+                            <select id="exportYear" class="hidden-select"><option value="">-- vyberte rok --</option></select>
+                            <div class="button-group" id="exportYearButtons" data-target="exportYear"></div>
+                        </div>
+                        <div class="form-row" id="exportPeriodRow" style="display:none;">
+                            <label for="exportPeriod" id="exportPeriodLabel">Měsíc / Čtvrtletí</label>
+                            <select id="exportPeriod" class="hidden-select"></select>
+                            <div class="button-group" id="exportPeriodButtons" data-target="exportPeriod"></div>
+                        </div>
+                        <div class="export-actions">
+                            <button class="btn-primary" id="exportApplyBtn" type="button">Zobrazit</button>
+                            <button class="btn-secondary" id="exportDownloadBtn" type="button">Stáhnout</button>
+                        </div>
+                    </div>
+
+                    <div id="exportResult" style="margin-top:20px;">
+                        <div id="exportTableWrap" style="overflow:auto;">
+                            <table class="saved-table" id="exportTable" style="width:100%; display:none;">
+                                <thead>
+                                            <tr>
+                                                <th>Datum</th>
+                                                <th>Číslo faktury</th>
+                                                <th>IČ dodavatele</th>
+                                                <th>IČ odběratele</th>
+                                                <th>Cena bez DPH</th>
+                                                <th>DPH</th>
+                                                <th>Celkem</th>
+                                            </tr>
+                                </thead>
+                                <tbody id="exportTableBody"></tbody>
+                                <tfoot>
+                                    <tr id="exportSummaryRow" style="font-weight:bold; display:none;">
+                                        <td colspan="4">Celkem</td>
+                                        <td id="exportNetSum">0</td>
+                                        <td id="exportVatSum">0</td>
+                                        <td id="exportTotalSum">0</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        <p id="exportEmpty" style="display:none;">Žádné faktury pro vybrané období.</p>
+                    </div>
+                </div>
             </section>
 
             <!-- Error zobrazení -->
