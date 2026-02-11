@@ -23,6 +23,7 @@ const rawText = document.getElementById('rawText');
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Aplikace inicializována');
     setupEventListeners();
+    if (typeof initExportUI === 'function') initExportUI();
 });
 
 /**
@@ -395,6 +396,233 @@ Vygenerováno: ${new Date().toLocaleString('cs-CZ')}
         console.error('Chyba při kopírování:', err);
         alert('❌ Nepodařilo se zkopírovat do schránky');
     });
+}
+
+// --- Export UI logic ---
+let exportCurrentItems = [];
+
+function isoFromDateText(dateText) {
+    if (!dateText) return null;
+    const parts = dateText.split('.').map(p => p.trim());
+    if (parts.length < 3) return null;
+    const dd = parts[0].padStart(2, '0');
+    const mm = parts[1].padStart(2, '0');
+    const yyyy = parts[2];
+    return `${yyyy}-${mm}-${dd}`;
+}
+
+function computeRange(type, year, period) {
+    if (!year) return { from: null, to: null };
+    const y = String(year);
+    if (type === 'monthly') {
+        const mm = String(period).padStart(2, '0');
+        const from = `${y}-${mm}-01`;
+        const lastDay = new Date(Number(y), Number(mm), 0).getDate();
+        const to = `${y}-${mm}-${String(lastDay).padStart(2, '0')}`;
+        return { from, to };
+    } else if (type === 'quarterly') {
+        const q = Number(period) || 1;
+        const startMonth = (q - 1) * 3 + 1;
+        const endMonth = startMonth + 2;
+        const from = `${y}-${String(startMonth).padStart(2, '0')}-01`;
+        const lastDay = new Date(Number(y), endMonth, 0).getDate();
+        const to = `${y}-${String(endMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        return { from, to };
+    } else {
+        // yearly
+        return { from: `${y}-01-01`, to: `${y}-12-31` };
+    }
+}
+
+async function populateExportYears() {
+    const yearSel = document.getElementById('exportYear');
+    if (!yearSel) return;
+    yearSel.innerHTML = '<option value="">-- vyberte rok --</option>';
+    try {
+        const res = await fetch('/api/documents');
+        if (res.ok) {
+            const data = await res.json();
+            const docs = Array.isArray(data) ? data : (data.items || []);
+            const years = new Set();
+            docs.forEach(d => {
+                const y = d.date_iso ? String(d.date_iso).slice(0,4) : (d.date_text ? (isoFromDateText(d.date_text) || '').slice(0,4) : null);
+                if (y) years.add(y);
+            });
+            const arr = Array.from(years).sort((a,b) => b - a);
+            arr.forEach(y => { const opt = document.createElement('option'); opt.value = y; opt.textContent = y; yearSel.appendChild(opt); });
+            return;
+        }
+        // If API responded but not OK (e.g., 401), fall through to fallback
+    } catch (err) {
+        console.error('populateExportYears error', err);
+    }
+
+    // Fallback: try to list files from testFaktury/ and uploads/ directory listings
+    try {
+        const paths = ['/testFaktury/', '/uploads/'];
+        const years = new Set();
+        for (const p of paths) {
+            try {
+                const r = await fetch(p);
+                if (!r.ok) continue;
+                const txt = await r.text();
+                // find hrefs (simple parsing of directory listing)
+                const re = /href\s*=\s*"([^"]+)"/gi;
+                let m;
+                while ((m = re.exec(txt)) !== null) {
+                    const name = m[1];
+                    // skip parent links
+                    if (name === '../') continue;
+                    // try to extract 4-digit year
+                    const yearMatch = name.match(/(20\d{2}|19\d{2})/);
+                    if (yearMatch) {
+                        years.add(yearMatch[0]);
+                        continue;
+                    }
+                    // try patterns like fYYYYMM
+                    const fmatch = name.match(/(\d{4})0?([1-9]|1[0-2])/);
+                    if (fmatch) years.add(fmatch[1]);
+                }
+            } catch (e) {
+                // ignore per-path errors
+            }
+        }
+        const arr = Array.from(years).sort((a,b) => b - a);
+        arr.forEach(y => { const opt = document.createElement('option'); opt.value = y; opt.textContent = y; yearSel.appendChild(opt); });
+    } catch (e) {
+        console.error('populateExportYears fallback error', e);
+    }
+}
+
+function fillPeriodOptions(type) {
+    const periodRow = document.getElementById('exportPeriodRow');
+    const periodSel = document.getElementById('exportPeriod');
+    if (!periodSel || !periodRow) return;
+    periodSel.innerHTML = '';
+    if (type === 'monthly') {
+        periodRow.style.display = '';
+        const months = ['Leden','Únor','Březen','Duben','Květen','Červen','Červenec','Srpen','Září','Říjen','Listopad','Prosinec'];
+        months.forEach((m, i) => {
+            const opt = document.createElement('option'); opt.value = String(i+1).padStart(2,'0'); opt.textContent = `${i+1} — ${m}`; periodSel.appendChild(opt);
+        });
+    } else if (type === 'quarterly') {
+        periodRow.style.display = '';
+        for (let q=1;q<=4;q++) { const opt = document.createElement('option'); opt.value = String(q); opt.textContent = `Q${q}`; periodSel.appendChild(opt); }
+    } else {
+        periodRow.style.display = 'none';
+    }
+}
+
+async function fetchExportedDocs(dateFrom, dateTo) {
+    const table = document.getElementById('exportTable');
+    const tableBody = document.getElementById('exportTableBody');
+    const empty = document.getElementById('exportEmpty');
+    const summaryRow = document.getElementById('exportSummaryRow');
+    const totalEl = document.getElementById('exportTotalSum');
+
+    if (!dateFrom || !dateTo) {
+        alert('Vyberte platné období');
+        return;
+    }
+
+    table.style.display = 'none';
+    empty.style.display = 'none';
+    summaryRow.style.display = 'none';
+    tableBody.innerHTML = '';
+
+    try {
+        const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo, per_page: '1000' });
+        const res = await fetch(`/api/documents?${params.toString()}`);
+        if (!res.ok) throw new Error('Chyba při dotazu na API');
+        const data = await res.json();
+        const docs = Array.isArray(data) ? data : (data.items || []);
+        exportCurrentItems = docs;
+        renderExportTable(docs);
+    } catch (err) {
+        console.error('fetchExportedDocs error', err);
+        alert('Chyba při načítání dat. Zkontrolujte server.');
+    }
+}
+
+function renderExportTable(items) {
+    const table = document.getElementById('exportTable');
+    const tableBody = document.getElementById('exportTableBody');
+    const empty = document.getElementById('exportEmpty');
+    const summaryRow = document.getElementById('exportSummaryRow');
+    const totalEl = document.getElementById('exportTotalSum');
+
+    tableBody.innerHTML = '';
+    if (!items || items.length === 0) {
+        table.style.display = 'none'; empty.style.display = ''; summaryRow.style.display = 'none';
+        return;
+    }
+
+    let total = 0;
+    items.forEach(d => {
+        const tr = document.createElement('tr');
+        const date = d.date_text || (d.date_iso ? d.date_iso : '');
+        const invoiceNo = d.invoice_number || d.document_name || '';
+        const sIc = d.supplier_ic || '';
+        const rIc = d.recipient_ic || '';
+        const amount = Number(d.total_amount || d.total || 0);
+        total += amount;
+
+        tr.innerHTML = `
+            <td>${date}</td>
+            <td>${invoiceNo}</td>
+            <td>${sIc}</td>
+            <td>${rIc}</td>
+            <td style="text-align:right;">${formatMoney(amount)}</td>
+        `;
+        tableBody.appendChild(tr);
+    });
+
+    totalEl.textContent = formatMoney(total);
+    table.style.display = '';
+    empty.style.display = 'none';
+    summaryRow.style.display = '';
+}
+
+function formatMoney(v) {
+    const n = Number(v) || 0;
+    return n.toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function downloadCurrentExport() {
+    if (!exportCurrentItems || exportCurrentItems.length === 0) { alert('Nejsou žádná data ke stažení'); return; }
+    const blob = new Blob([JSON.stringify(exportCurrentItems, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `export_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function initExportUI() {
+    const pre = document.getElementById('exportPrehled');
+    const yearSel = document.getElementById('exportYear');
+    const periodSel = document.getElementById('exportPeriod');
+    const applyBtn = document.getElementById('exportApplyBtn');
+    const downloadBtn = document.getElementById('exportDownloadBtn');
+
+    if (!pre || !yearSel || !applyBtn || !downloadBtn) return;
+
+    pre.addEventListener('change', () => { fillPeriodOptions(pre.value); });
+    yearSel.addEventListener('change', () => {});
+    applyBtn.addEventListener('click', () => {
+        const type = pre.value; const year = yearSel.value; const period = periodSel ? periodSel.value : null;
+        const { from, to } = computeRange(type, year, period);
+        if (!from || !to) { alert('Vyberte rok (a případně měsíc/čtvrtletí)'); return; }
+        fetchExportedDocs(from, to);
+    });
+    downloadBtn.addEventListener('click', downloadCurrentExport);
+
+    // Initial fill
+    fillPeriodOptions(pre.value);
+    populateExportYears();
 }
 
 /**
